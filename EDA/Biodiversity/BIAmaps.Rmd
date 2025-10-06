@@ -1,5 +1,5 @@
 ---
-title: "TreeandNeighbourhood"
+title: "Beach BIA Biodiversity BIA"
 author: "Derek Li"
 date: "2025-09-29"
 output: html_document
@@ -21,14 +21,15 @@ library(dplyr)
 data.dir <- gsub('/code', '/data', getwd())
 
 # Reading in all data
-BIA_data <- st_read(paste0(data.dir, "/BIAshapes/Business Improvement Areas Data - 4326.shp"))
+BIA_data <- st_read(paste0(data.dir, "/data/BIAshapes/Business Improvement Areas Data - 4326.shp"))
 
-beach_park <- st_read(paste0(data.dir, "/beach_shapes/WoodbineBeach.shp"))
+beach_park <- st_read(paste0(data.dir, "/data/beach_shapes/WoodbineBeach.shp"))
 
-trees <- st_read(paste0(data.dir, "/tree_shapes/TOPO_TREE_WGS84.shp"))
+trees <- st_read(paste0(data.dir, "/data/trees/TOPO_TREE_WGS84.shp"))
 
-inaturalist_df <- read.csv(paste0(data.dir, "/inaturalist/observations.csv"))
+inaturalist_df <- read.csv(paste0(data.dir, "/data/inaturalist/observations.csv"))
 ```
+
 
 ```{r}
 # Getting rid of all other BIA shapes
@@ -50,17 +51,18 @@ inaturalist_df <- inaturalist_df %>%
 obs_sf <- st_as_sf(inaturalist_df, coords = c("longitude", "latitude"), crs = 4326)
 ```
 
+
 ```{r}
-# Trees dataset is too big
-# leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
-  # addCircles(data = trees)
-# tree_beach <- st_join(trees, BEACH, join = st_within) %>% 
-#   filter(!is.na(st_geometry(BEACH)))
+# Displaying trees on the map
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>%
+  addCircles(data = trees,
+             opacity = 1,
+             radius = 1)
 ```
 
 
 ```{r}
-# displaying the shapes
+# Displaying all the shapes
 leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
   addPolygons(data = beach_bia,
               label = ~AREA_NA8,
@@ -75,28 +77,59 @@ leaflet() %>% addProviderTiles("CartoDB.Positron") %>%
                    label = ~scientific_name,
                    color = "blue",
                    opacity = 1,
+                   radius = 1) %>% 
+  addCircleMarkers(data = trees,
+                   color = "green",
+                   opacity = 1,
                    radius = 1)
 ```
 
+
 ```{r}
-# Only interested in species observations within the boundaries
+# Only interested in iNaturalist observations within areas of interested
 polys <- bind_rows(beach_bia, beach_park)
 obs_within <- st_filter(obs_sf, polys, .predicate = st_within)
 
+# Only interested in trees within areas of interest
+trees_within <- st_filter(trees, polys, .predicate = st_within)
+```
+
+
+```{r}
 # Mapping everything together
 leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
   addPolygons(data = beach_bia,
+              group = "BIA street",
               label = ~AREA_NA8,
               fillOpacity = 0.1,
               weight = 2) %>% 
   addPolygons(data = beach_park,
               label = "Woodbine Beach/Park",
-              fillColor = "pink",
+              group = "Park/Beach",
+              fillColor = "red",
               color = "red",
               weight = 2) %>% 
-  addCircleMarkers(data = obs_within,
-                   label = ~scientific_name,
-                   opacity = 1,
-                   radius = 1)
+  addCircles(data = obs_within,
+             group = "iNaturalist",
+             color = "blue",
+             label = ~scientific_name,
+             opacity = 1,
+             radius = 1,
+             weight = 4) %>% 
+  addCircles(data = trees_within,
+             group = "Trees",
+             color = "green",
+             opacity = 1,
+             radius = 1,
+             weight = 4) %>% 
+  addLegend(position = "bottomright",
+            colors = c("blue", "green"),
+            labels = c("iNaturalist Observations", "Trees"),
+            title = "Legend",
+            opacity = 1) %>% 
+  addLayersControl(position = "topright",
+                   overlayGroups = c("Trees", "iNaturalist",
+                                     "BIA street", "Park/Beach"),
+                   options = layersControlOptions(collapsed = FALSE))
 ```
 
