@@ -1,0 +1,76 @@
+---
+title: "490-tut2"
+output: html_document
+date: "2025-09-29"
+---
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+```
+
+```{r}
+df <- read.csv("SR2024.csv")
+```
+
+```{r}
+df_beach <- df %>%
+  filter(First_3_Chars_of_Postal_Code == "M4E")
+
+df_beach
+```
+
+```{r}
+# group by Section
+df_section <- df_beach %>%
+  group_by(Section) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+df_section
+```
+
+```{r}
+df_beach %>%
+  count(Section, name = "count") %>%
+  ggplot(aes(x = reorder(Section, count), y = count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "311 Complaints by Section", x = "Section", y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+section_name <- "Collections"   # 改成你要看的Section
+
+df_request <- df_beach %>%
+  filter(Section == section_name) %>%
+  group_by(Service_Request_Type) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+df_request
+
+```
+
+```{r}
+unique(df_beach$Service_Request_Type)
+```
+
+```{r}
+library(stringr)
+
+# 提取最后一个 / 或 : 后面的词组作为类别
+df_request %>%                   # 你当前的那个数据框
+  mutate(Request_Category = Service_Request_Type %>%
+           str_extract("[^/:]+$") %>%         # 取最后一个 / 或 : 之后
+           str_squish() %>%                   # 去多余空白
+           str_to_title())                    # 统一大小写（可选）
+df_request
+
+# 统计每类数量（从多到少）
+cat_count <- df_request %>%
+  count(Request_Category, sort = TRUE)
+
+cat_count
+```
