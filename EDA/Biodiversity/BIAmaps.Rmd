@@ -1,0 +1,102 @@
+---
+title: "TreeandNeighbourhood"
+author: "Derek Li"
+date: "2025-09-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(sf)
+library(leaflet)
+library(dplyr)
+```
+
+```{r}
+data.dir <- gsub('/code', '/data', getwd())
+
+# Reading in all data
+BIA_data <- st_read(paste0(data.dir, "/BIAshapes/Business Improvement Areas Data - 4326.shp"))
+
+beach_park <- st_read(paste0(data.dir, "/beach_shapes/WoodbineBeach.shp"))
+
+trees <- st_read(paste0(data.dir, "/tree_shapes/TOPO_TREE_WGS84.shp"))
+
+inaturalist_df <- read.csv(paste0(data.dir, "/inaturalist/observations.csv"))
+```
+
+```{r}
+# Getting rid of all other BIA shapes
+beach_bia <- BIA_data %>% filter(AREA_NA8 == "The Beach")
+
+# Converting data from iNaturalist into sf
+inaturalist_df <- inaturalist_df %>%
+  mutate(
+    lon = as.numeric(longitude),
+    lat = as.numeric(latitude)
+  ) %>%
+  filter(!is.na(longitude),
+         !is.na(latitude),
+         lon >= -180,
+         lon <= 180,
+         lat >= -90,
+         lat <= 90)
+
+obs_sf <- st_as_sf(inaturalist_df, coords = c("longitude", "latitude"), crs = 4326)
+```
+
+```{r}
+# Trees dataset is too big
+# leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  # addCircles(data = trees)
+# tree_beach <- st_join(trees, BEACH, join = st_within) %>% 
+#   filter(!is.na(st_geometry(BEACH)))
+```
+
+
+```{r}
+# displaying the shapes
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = beach_bia,
+              label = ~AREA_NA8,
+              fillOpacity = 0.1,
+              weight = 2) %>% 
+  addPolygons(data = beach_park,
+              label = "Woodbine Beach/Park",
+              fillColor = "pink",
+              color = "red",
+              weight = 2) %>% 
+  addCircleMarkers(data = obs_sf,
+                   label = ~scientific_name,
+                   color = "blue",
+                   opacity = 1,
+                   radius = 1)
+```
+
+```{r}
+# Only interested in species observations within the boundaries
+polys <- bind_rows(beach_bia, beach_park)
+obs_within <- st_filter(obs_sf, polys, .predicate = st_within)
+
+# Mapping everything together
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = beach_bia,
+              label = ~AREA_NA8,
+              fillOpacity = 0.1,
+              weight = 2) %>% 
+  addPolygons(data = beach_park,
+              label = "Woodbine Beach/Park",
+              fillColor = "pink",
+              color = "red",
+              weight = 2) %>% 
+  addCircleMarkers(data = obs_within,
+                   label = ~scientific_name,
+                   opacity = 1,
+                   radius = 1)
+```
+
