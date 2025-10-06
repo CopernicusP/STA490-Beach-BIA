@@ -25,9 +25,11 @@ BIA_data <- st_read(paste0(data.dir, "/data/BIAshapes/Business Improvement Areas
 
 beach_park <- st_read(paste0(data.dir, "/data/beach_shapes/WoodbineBeach.shp"))
 
-trees <- st_read(paste0(data.dir, "/data/trees/TOPO_TREE_WGS84.shp"))
+trees <- st_read(paste0(data.dir, "/data/trees/CROPPED_TOPO_TREE_WGS84.shp"))
 
 inaturalist_df <- read.csv(paste0(data.dir, "/data/inaturalist/observations.csv"))
+
+water <- st_read(paste0(data.dir, "/data/waterbodies/TOPO_Waterbody_WGS84.shp"))
 ```
 
 
@@ -49,6 +51,29 @@ inaturalist_df <- inaturalist_df %>%
          lat <= 90)
 
 obs_sf <- st_as_sf(inaturalist_df, coords = c("longitude", "latitude"), crs = 4326)
+```
+
+
+```{r}
+# Looking at water bodies
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = water,
+              label = ~OBJECTID)
+```
+
+
+```{r}
+# Isolating Glen Stewart Ravine
+glen_rav <- water %>% filter(OBJECTID == 446)
+
+# Adding buffer around ravine
+glen_utm <- st_transform(glen_rav, 32617)
+glen_buffer_utm <- st_buffer(glen_utm, dist = 20)
+glen_buffer <- st_transform(glen_buffer_utm, crs = 4326)
+
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = glen_rav_buff,
+              label = "Glen Stewart Ravine")
 ```
 
 
@@ -87,7 +112,7 @@ leaflet() %>% addProviderTiles("CartoDB.Positron") %>%
 
 ```{r}
 # Only interested in iNaturalist observations within areas of interested
-polys <- bind_rows(beach_bia, beach_park)
+polys <- bind_rows(beach_bia, beach_park, glen_buffer)
 obs_within <- st_filter(obs_sf, polys, .predicate = st_within)
 
 # Only interested in trees within areas of interest
@@ -109,6 +134,13 @@ leaflet() %>% addProviderTiles("CartoDB.Positron") %>%
               fillColor = "red",
               color = "red",
               weight = 2) %>% 
+  addPolygons(data = glen_buffer,
+              label = "Glen Stewart Ravine",
+              group = "Ravine",
+              fillOpacity = 0.4,
+              fillColor = "purple",
+              color = "purple",
+              weight = 2) %>% 
   addCircles(data = obs_within,
              group = "iNaturalist",
              color = "blue",
@@ -123,13 +155,19 @@ leaflet() %>% addProviderTiles("CartoDB.Positron") %>%
              radius = 1,
              weight = 4) %>% 
   addLegend(position = "bottomright",
-            colors = c("blue", "green"),
-            labels = c("iNaturalist Observations", "Trees"),
+            colors = c("blue", "green", "purple"),
+            labels = c("iNaturalist Observations", "Trees", "Ravine"),
             title = "Legend",
             opacity = 1) %>% 
   addLayersControl(position = "topright",
                    overlayGroups = c("Trees", "iNaturalist",
-                                     "BIA street", "Park/Beach"),
+                                     "BIA street", "Park/Beach",
+                                     "Ravine"),
                    options = layersControlOptions(collapsed = FALSE))
+```
+
+
+```{r}
+
 ```
 
