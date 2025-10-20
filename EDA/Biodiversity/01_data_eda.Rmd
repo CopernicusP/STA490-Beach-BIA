@@ -1,0 +1,233 @@
+---
+title: "Beach BIA — Biodiversity EDA"
+author: "Peter"
+date: "`r format(Sys.Date())`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = FALSE)
+```
+
+#1. Load Packages & Paths
+```{r}
+suppressPackageStartupMessages({
+  library(sf); library(dplyr); library(readr); library(stringr)
+  library(tibble); library(janitor); library(glue); library(leaflet); library(purrr)
+})
+
+DATA_DIR <- getwd()
+OUT_DIR  <- file.path(DATA_DIR, "outputs")
+dir.create(OUT_DIR, showWarnings = FALSE, recursive = TRUE)
+
+message(glue("Data dir: {DATA_DIR}"))
+message(glue("Outputs:  {normalizePath(OUT_DIR)}"))
+
+# --- robust resolvers ---
+
+# prefer .geojson; else choose .shp that has .shx & .dbf
+find_vector <- function(base_pat, prefer_geojson = TRUE) {
+  # 1) geojson first
+  if (prefer_geojson) {
+    gj <- list.files(DATA_DIR, pattern = paste0(base_pat, ".*\\.geojson$"),
+                     recursive = TRUE, full.names = TRUE)
+    if (length(gj) > 0) return(gj[1])
+  }
+  # 2) shapefile candidates
+  shp <- list.files(DATA_DIR, pattern = paste0(base_pat, ".*\\.shp$"),
+                    recursive = TRUE, full.names = TRUE)
+  if (length(shp) == 0) stop(glue("Vector not found: {base_pat}(.geojson|.shp)"))
+
+  # keep only shapefiles with sidecars (.shx & .dbf)
+  complete <- function(p) {
+    base <- sub("\\.shp$", "", p, ignore.case = TRUE)
+    file.exists(paste0(base, ".shx")) && file.exists(paste0(base, ".dbf"))
+  }
+  ok <- shp[vapply(shp, complete, logical(1))]
+  if (length(ok) == 0) {
+    # last resort: allow GDAL to rebuild .shx (not always reliable)
+    Sys.setenv(SHAPE_RESTORE_SHX = "YES")
+    warning(glue("Only incomplete SHP found for: {base_pat}. Trying SHX restore on the first candidate."))
+    return(shp[1])
+  }
+  ok[1]
+}
+
+# sf reader -> EPSG:4326
+safe_read_sf <- function(f){
+  x <- suppressMessages(sf::st_read(f, quiet = TRUE))
+  if (!is.na(sf::st_crs(x)) && st_crs(x)$epsg != 4326) x <- st_transform(x, 4326)
+  x
+}
+
+```
+
+#2. Quick Data Check
+```{r}
+# resolve paths (robust to subfolders/underscores/spaces)
+inat_path  <- list.files(DATA_DIR, pattern = "observations-624727\\.csv$", recursive = TRUE, full.names = TRUE)[1]
+if (is.na(inat_path) || is.null(inat_path)) stop("iNat CSV not found: observations-624727.csv")
+
+bia_path   <- find_vector("Business.*Areas.*4326")
+green_path <- find_vector("Green.*Spaces.*4326")
+neig_path  <- find_vector("Neighbourhoods.*4326")
+tree_path  <- find_vector("TOPO_TREE_WGS84",      prefer_geojson = FALSE)
+watr_path  <- find_vector("TOPO_Waterbody_WGS84", prefer_geojson = FALSE)
+bech_path  <- find_vector("WoodbineBeach")  # avoids the 508B single .shp
+
+message("✅ Resolved files:")
+print(c(inat_csv = inat_path, bia = bia_path, green = green_path,
+        neigh = neig_path, trees = tree_path, water = watr_path, woodbine = bech_path))
+
+```
+
+#3. Load Datasets
+```{r}
+# iNaturalist
+inat  <- read_csv(inat_path, show_col_types = FALSE) %>%
+  clean_names() %>%
+  mutate(latitude = as.numeric(latitude),
+         longitude = as.numeric(longitude)) %>%
+  filter(!is.na(latitude), !is.na(longitude),
+         between(latitude, -90, 90),
+         between(longitude, -180, 180))
+
+# spatial layers
+bia    <- safe_read_sf(bia_path)
+green  <- safe_read_sf(green_path)
+neigh  <- safe_read_sf(neig_path)
+trees  <- safe_read_sf(tree_path)
+water  <- safe_read_sf(watr_path)
+
+# WoodbineBeach with fallback from Green Spaces
+beach  <- tryCatch(safe_read_sf(bech_path), error = function(e) NULL)
+if (is.null(beach) || nrow(beach) == 0) {
+  warning("WoodbineBeach vector not usable. Falling back to Green Spaces name match: 'Woodbine'.")
+  char_cols <- names(green)[vapply(green, function(x) is.character(x) || is.factor(x), logical(1))]
+  if (length(char_cols) == 0) stop("No character columns in Green Spaces to identify 'Woodbine'.")
+  idx <- Reduce(`|`, lapply(char_cols, function(col) str_detect(tolower(green[[col]]), "woodbine")))
+  beach <- green[idx, ]
+  if (nrow(beach) == 0) stop("Could not find 'Woodbine' polygon in Green Spaces.")
+}
+
+# points -> sf
+inat_sf <- st_as_sf(inat, coords = c("longitude","latitude"), crs = 4326, remove = FALSE)
+
+# --- pick BIA rows by name (robust) ---
+# find character columns only
+char_cols <- names(bia)[vapply(bia, function(x) is.character(x) || is.factor(x), logical(1))]
+# search "Beach" variants
+pat <- stringr::regex("(^|\\b)(the\\s+beach|beaches|beach)(\\b|$)", ignore_case = TRUE)
+
+hit_counts <- sapply(char_cols, function(col) {
+  sum(stringr::str_detect(as.character(bia[[col]]), pat), na.rm = TRUE)
+})
+
+if (length(hit_counts) > 0 && max(hit_counts) > 0) {
+  best_col <- names(which.max(hit_counts))
+  beach_bia <- bia[stringr::str_detect(as.character(bia[[best_col]]), pat), ]
+} else {
+  warning("No BIA name matched 'Beach/Beaches/The Beach'. Using full BIA as fallback.")
+  beach_bia <- bia
+}
+
+# quick summary
+print(data.frame(
+  dataset = c("inat","bia","green","neigh","trees","water","beach"),
+  rows = c(nrow(inat),nrow(bia),nrow(green),nrow(neigh),nrow(trees),nrow(water),nrow(beach)),
+  crs = c(NA,st_crs(bia)$epsg,st_crs(green)$epsg,st_crs(neigh)$epsg,
+          st_crs(trees)$epsg,st_crs(water)$epsg,st_crs(beach)$epsg)
+))
+
+```
+
+#4. Filter to Beach BIA
+```{r}
+# --- union AOI (BIA ∪ Woodbine), buffer, and filter ---
+# fix geometries if needed
+beach_bia  <- sf::st_make_valid(beach_bia)
+beach      <- sf::st_make_valid(beach)
+
+# union
+aoi <- sf::st_union(beach_bia, beach)
+
+# 30 m buffer in UTM, then back to WGS84
+aoi_buf <- aoi |>
+  sf::st_transform(32617) |>
+  sf::st_buffer(30) |>
+  sf::st_transform(4326)
+
+# filter with intersects (less strict than within)
+inat_beach  <- sf::st_filter(inat_sf, aoi_buf)   # default = st_intersects
+trees_beach <- sf::st_filter(trees,   aoi_buf)
+
+```
+
+#5. EDA: Basic Statistics
+```{r}
+species_count <- inat_beach %>% summarise(unique_species = n_distinct(scientific_name)) %>% pull(unique_species)
+tree_count    <- nrow(trees_beach)
+obs_total     <- nrow(inat_beach)
+
+tibble(
+  Category = c("Total iNaturalist obs","Unique species","Tree points (BIA area)"),
+  Count = c(obs_total, species_count, tree_count)
+)
+
+```
+
+#6. EDA: Spatial Layers Visualization
+```{r}
+leaflet(options = leafletOptions(minZoom = 10)) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = beach_bia, label = ~"Beach BIA", fillOpacity = 0.05, weight = 2, color = "#444") %>%
+  addPolygons(data = beach, label = "Woodbine Beach", color = "red", fillOpacity = 0.15, weight = 2) %>%
+  addCircleMarkers(data = inat_beach, radius = 2, color = "blue", stroke = FALSE, fillOpacity = 0.8,
+                   label = ~scientific_name, group = "iNaturalist") %>%
+  addCircleMarkers(data = trees_beach, radius = 2, color = "green", stroke = FALSE, fillOpacity = 0.8,
+                   group = "Trees") %>%
+  addLayersControl(
+    overlayGroups = c("iNaturalist","Trees"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  addLegend(position="bottomright", colors=c("blue","green"),
+            labels=c("iNaturalist","Trees"), title="Legend")
+
+```
+
+#7. Park-level Summary (Woodbine Beach only)
+```{r}
+# area (hectare)
+AREA_CRS <- 32617
+beach_area <- beach %>% st_transform(AREA_CRS) %>%
+  mutate(area_ha = as.numeric(st_area(geometry))/10000) %>%
+  st_transform(4326)
+
+inat_in_beach <- suppressWarnings(st_filter(inat_sf, beach, .predicate = st_within))
+species_n <- n_distinct(inat_in_beach$scientific_name)
+area_ha   <- beach_area$area_ha[1]
+density   <- species_n / area_ha
+
+bio_summary <- tibble(
+  park = "Woodbine Beach",
+  species_n = species_n,
+  area_ha = round(area_ha,2),
+  species_per_ha = round(density,2)
+)
+bio_summary
+
+write_csv(bio_summary, file.path(OUT_DIR, "biodiversity_summary.csv"))
+
+```
+
+
+
+
+
+
+
+
