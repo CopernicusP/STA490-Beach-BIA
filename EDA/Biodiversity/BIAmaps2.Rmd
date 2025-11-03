@@ -1,0 +1,169 @@
+---
+title: "Beach BIA 2"
+author: "Derek Li"
+date: "2025-11-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(sf)
+library(leaflet)
+library(dplyr)
+```
+
+
+```{r}
+data.dir <- gsub('/code', '/data', getwd())
+
+nbhd <- st_read(paste0(data.dir, "/data/neighbourhoods/Neighbourhoods - 4326.shp"))
+
+trees <- st_read(paste0(data.dir, "/data/trees/TOPO_TREE_WGS84.shp"))
+
+inaturalist_df <- read.csv(paste0(data.dir, "/data/inaturalist/observations.csv"))
+
+water <- st_read(paste0(data.dir, "/data/waterbodies/TOPO_Waterbody_WGS84.shp"))
+```
+
+
+```{r}
+the_beaches <- nbhd %>% filter(X_id1 == 93)
+
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data=the_beaches)
+```
+
+
+```{r}
+# iNaturalist observations into sf
+inaturalist_df <- inaturalist_df %>%
+  mutate(
+    lon = as.numeric(longitude),
+    lat = as.numeric(latitude)
+  ) %>%
+  filter(!is.na(longitude),
+         !is.na(latitude),
+         lon >= -180,
+         lon <= 180,
+         lat >= -90,
+         lat <= 90)
+
+obs_sf <- st_as_sf(inaturalist_df, coords = c("longitude", "latitude"), 
+                   crs = 4326)
+
+# Keeping observations within the BIA
+obs_within <- st_filter(obs_sf, the_beaches, .predicate = st_within)
+```
+
+
+```{r}
+# Categorizing iNaturalist observations
+m <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data=the_beaches)
+
+obs_within <- obs_within %>% mutate(category = case_when(
+  iconic_taxon_name == "Plantae" ~ "Plants",
+  iconic_taxon_name == "Aves" ~ "Birds",
+  iconic_taxon_name == "Insecta" ~ "Insects",
+  iconic_taxon_name == "Mammalia" ~ "Mammals",
+  iconic_taxon_name == "Reptilia" ~ "Reptiles",
+  iconic_taxon_name == "Arachnida" ~ "Spiders",
+  TRUE ~ "Other"))
+
+obs_within$category <- as.factor(obs_within$category)
+groups <- levels(obs_within$category)
+
+species_cat.pal <- colorFactor("viridis", domain = groups)
+
+for (g in groups) {
+  m <- m %>% addCircles(data = subset(obs_within, category == g),
+                        group = g,
+                        label = g,
+                        color = ~species_cat.pal(g),
+                        radius = 1,
+                        opacity = 1,
+                        weight = 4)
+}
+
+m %>% addLayersControl(overlayGroups = groups,
+                       options = layersControlOptions(collapsed = FALSE)
+                       ) %>%
+  addLegend("bottomleft", pal = species_cat.pal,
+            values = obs_within$category,
+            opacity = 1)
+```
+
+
+```{r}
+# Adding time filter for iNaturalist observations
+start_date <- as.Date("2020-01-01")
+end_date <- as.Date(readline("Enter an end date (YYYY-MM-DD): "))
+
+obs_within_time <- obs_within %>%
+  filter(as.Date(observed_on) <= end_date)
+
+leaflet(the_beaches) %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(color = "lightgrey") %>% 
+  addCircles(data = obs_within_time,
+             opacity = 1,
+             color = "blue",
+             radius = 1,
+             weight = 4,
+             popup = ~paste0(obs_within_time$category, "<br>",
+                             "Observed on:  ", obs_within_time$observed_on))
+```
+
+
+```{r}
+# Intersecting trees, waterbodies with BIA
+trees_within <- st_filter(trees, the_beaches, .predicate = st_within)
+
+water_within <- st_filter(water, the_beaches, .predicate = st_within)
+
+# Creating buffers around water bodies
+water_proj <- st_transform(water_within, 32617)
+
+water_buffer_proj <- st_buffer(water_proj, dist = 20)
+
+water_buffer <- st_transform(water_buffer_proj, crs = 4326)
+```
+
+
+```{r}
+# Mapping everything together
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = the_beaches,
+              color = "lightgray",
+              opacity = 0.8) %>% 
+  addPolygons(data = water_buffer,
+              color = "blue",
+              opacity = 0.9,
+              group = "Waterbodies") %>% 
+  addCircles(data = obs_within,
+             opacity = 1,
+             color = "orange",
+             radius = 1,
+             weight = 2,
+             group = "iNaturalist") %>% 
+  addCircles(data = trees_within,
+             opacity = 1,
+             color = "darkgreen",
+             radius = 1,
+             weight = 2,
+             group = "Trees") %>% 
+  addLegend("bottomright",
+            colors = c("orange", "darkgreen", "blue"),
+            labels = c("Biodiversity (iNaturalist)",
+                       "Trees",
+                       "Waterbodies")) %>% 
+  addLayersControl(position = "topright",
+                   overlayGroups = c("iNaturalist", "Trees", "Waterbodies"),
+                   options = layersControlOptions(collapsed = FALSE))
+```
+
+
