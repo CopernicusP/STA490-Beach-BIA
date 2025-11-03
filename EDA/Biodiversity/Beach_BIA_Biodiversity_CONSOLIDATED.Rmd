@@ -1,0 +1,503 @@
+---
+title: "Beach BIA — Biodiversity (Consolidated)"
+author: "Biodiversity Group"
+date: '`r format(Sys.Date())`'
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = FALSE)
+suppressPackageStartupMessages({
+  library(sf); library(dplyr); library(readr); library(stringr)
+  library(janitor); library(glue); library(leaflet); library(purrr)
+  library(ggplot2); library(lubridate); library(tibble); library(tidyr)
+})
+
+DATA_DIR <- getwd()
+OUT_DIR  <- file.path(DATA_DIR, "outputs")
+dir.create(OUT_DIR, showWarnings = FALSE, recursive = TRUE)
+msg <- function(...) message(glue::glue(...))
+msg("Data dir: {DATA_DIR}")
+msg("Outputs : {normalizePath(OUT_DIR)}")
+
+# param: AOI buffer in meters
+AOI_BUFFER_M <- 30
+
+```
+
+
+# 1) Resolve files
+```{r}
+# find vector path (prefer geojson; else complete shp)
+find_vector <- function(base_pat, prefer_geojson = TRUE){
+  if (prefer_geojson){
+    gj <- list.files(DATA_DIR, pattern = paste0(base_pat,".*\\.geojson$"),
+                     recursive = TRUE, full.names = TRUE)
+    if (length(gj) > 0) return(gj[1])
+  }
+  shp <- list.files(DATA_DIR, pattern = paste0(base_pat,".*\\.shp$"),
+                    recursive = TRUE, full.names = TRUE)
+  if (!length(shp)) stop(glue("Vector not found: {base_pat}(.geojson|.shp)"))
+  complete <- function(p){
+    b <- sub("\\.shp$","",p,ignore.case=TRUE)
+    file.exists(paste0(b,".shx")) && file.exists(paste0(b,".dbf"))
+  }
+  ok <- shp[vapply(shp, complete, logical(1))]
+  if (!length(ok)) stop(glue("Only incomplete SHP for: {base_pat}"))
+  ok[1]
+}
+
+resolved <- list(
+  inat_csv = list.files(DATA_DIR, pattern="observations-624727\\.csv$", recursive=TRUE, full.names=TRUE)[1],
+  bia      = find_vector("Business.*Areas.*4326"),
+  green    = find_vector("Green.*Spaces.*4326"),
+  neigh    = find_vector("Neighbourhoods.*4326"),
+  trees    = find_vector("TOPO_TREE_WGS84",      prefer_geojson = FALSE),
+  water    = find_vector("TOPO_Waterbody_WGS84", prefer_geojson = FALSE),
+  woodbine = {
+    wb <- list.files(DATA_DIR, pattern="WoodbineBeach\\.shp$", recursive=TRUE, full.names=TRUE)
+    if (length(wb)) wb[1] else NA_character_
+  }
+)
+
+msg("Resolved paths:")
+print(resolved)
+if (is.na(resolved$inat_csv)) stop("iNaturalist CSV not found.")
+
+```
+
+# 2) Load cached or rebuild AOI + filtered layers
+```{r}
+# read sf (force EPSG:4326)
+safe_read_sf <- function(f){
+  x <- suppressMessages(st_read(f, quiet = TRUE))
+  if (!is.na(st_crs(x)) && st_crs(x)$epsg != 4326) x <- st_transform(x, 4326)
+  x
+}
+
+# cache targets
+inat_gj <- file.path(OUT_DIR,"inat_beach.geojson")
+tree_gj <- file.path(OUT_DIR,"trees_beach.geojson")
+aoi_gj  <- file.path(OUT_DIR,"Beach_BIA_area.geojson")
+
+use_cached <- file.exists(inat_gj) && file.exists(tree_gj) && file.exists(aoi_gj)
+
+if (use_cached){
+  msg("✅ Using cached GeoJSON in outputs/")
+  inat_beach  <- safe_read_sf(inat_gj)
+  trees_beach <- safe_read_sf(tree_gj)
+  aoi_buf     <- safe_read_sf(aoi_gj)
+} else {
+  msg("ℹ Rebuilding from raw data …")
+
+  # iNat
+  inat <- read_csv(resolved$inat_csv, show_col_types = FALSE) |>
+    clean_names() |>
+    mutate(latitude = as.numeric(latitude),
+           longitude = as.numeric(longitude)) |>
+    filter(!is.na(latitude), !is.na(longitude),
+           between(latitude,-90,90), between(longitude,-180,180))
+  inat_sf <- st_as_sf(inat, coords = c("longitude","latitude"), crs = 4326, remove = FALSE)
+
+  # base layers
+  bia   <- safe_read_sf(resolved$bia)
+  green <- safe_read_sf(resolved$green)
+  trees <- safe_read_sf(resolved$trees)
+
+  # pick Beach BIA (robust by name)
+  char_cols <- names(bia)[vapply(bia, function(x) is.character(x) || is.factor(x), logical(1))]
+  pat <- regex("(^|\\b)(the\\s+beach|beaches|beach)(\\b|$)", ignore_case = TRUE)
+  hits <- sapply(char_cols, function(col) sum(str_detect(as.character(bia[[col]]), pat), na.rm=TRUE))
+  beach_bia <- if (length(hits) && max(hits) > 0){
+    best <- names(which.max(hits)); bia[str_detect(as.character(bia[[best]]), pat), ]
+  } else { warning("No BIA name match; using all BIA."); bia }
+
+  # Woodbine (shp or fallback to Green Spaces)
+  beach <- if (!is.na(resolved$woodbine)) {
+    tryCatch(safe_read_sf(resolved$woodbine), error=function(e) NULL)
+  } else NULL
+  if (is.null(beach) || nrow(beach)==0){
+    cc <- names(green)[vapply(green, function(x) is.character(x)||is.factor(x), logical(1))]
+    idx <- Reduce(`|`, lapply(cc, function(col) str_detect(tolower(green[[col]]), "woodbine")))
+    beach <- green[idx,]
+    if (nrow(beach)==0) stop("No 'Woodbine' polygon found.")
+  }
+
+  # AOI union + buffer (param)
+  aoi <- st_union(st_make_valid(beach_bia), st_make_valid(beach))
+  aoi_buf <- aoi |> st_transform(32617) |> st_buffer(AOI_BUFFER_M) |> st_transform(4326)
+
+  # filter (intersects) and save
+  inat_beach  <- st_filter(inat_sf, aoi_buf)
+  trees_beach <- st_filter(trees,   aoi_buf)
+
+  st_write(inat_beach,  inat_gj, delete_dsn=TRUE, quiet=TRUE)
+  st_write(trees_beach, tree_gj, delete_dsn=TRUE, quiet=TRUE)
+  st_write(aoi_buf,     aoi_gj,  delete_dsn=TRUE, quiet=TRUE)
+  msg("💾 Saved GeoJSON to outputs/")
+}
+```
+
+# 3) iNat categories + QA
+```{r}
+# robust iconic class
+iconic_candidates <- intersect(
+  c("iconic_taxon_name", "taxon_iconic_name"),
+  names(inat_beach)
+)
+inat_beach_clean <- inat_beach %>%
+  mutate(
+    iconic_tmp = if (length(iconic_candidates) > 0) {
+      dplyr::coalesce(!!! rlang::syms(iconic_candidates))
+    } else NA_character_
+  ) %>%
+  mutate(
+    category = dplyr::case_when(
+      stringr::str_detect(iconic_tmp, stringr::regex("Plantae", TRUE))  ~ "Plants",
+      stringr::str_detect(iconic_tmp, stringr::regex("Aves", TRUE))     ~ "Birds",
+      stringr::str_detect(iconic_tmp, stringr::regex("Insecta", TRUE))  ~ "Insects",
+      stringr::str_detect(iconic_tmp, stringr::regex("Mammalia", TRUE)) ~ "Mammals",
+      TRUE ~ "Other"
+    )
+  ) %>% dplyr::select(-iconic_tmp)
+
+# QA: de-dup if id present (safe for sf)
+id_col <- intersect(c("id","observation_id"), names(inat_beach_clean))[1]
+
+if (!is.na(id_col) && nzchar(id_col)) {
+  id_sym <- rlang::sym(id_col)
+  inat_beach_clean <- inat_beach_clean %>%
+    arrange(!!id_sym) %>%                 # sort by ID
+    dplyr::distinct(!!id_sym, .keep_all = TRUE)  # drop dup IDs
+}
+
+# Optional: research-grade only (switch variable for later if you want)
+if ("quality_grade" %in% names(inat_beach_clean)) {
+  inat_beach_research <- inat_beach_clean %>% filter(quality_grade == "research")
+} else {
+  inat_beach_research <- inat_beach_clean
+}
+
+table(inat_beach_clean$category)
+```
+
+# 4) Core stats + CSVs
+```{r}
+AREA_CRS <- 32617
+area_ha <- aoi_buf |> st_transform(AREA_CRS) |> st_area() |> as.numeric() / 10000
+species_n <- if ("scientific_name" %in% names(inat_beach_clean))
+  n_distinct(inat_beach_clean$scientific_name) else NA_integer_
+
+summary_tbl <- tibble(
+  total_obs      = nrow(inat_beach_clean),
+  unique_species = species_n,
+  tree_points    = nrow(trees_beach),
+  area_ha        = round(sum(area_ha), 2),
+  species_per_ha = round(species_n / sum(area_ha), 3),
+  aoi_buffer_m   = AOI_BUFFER_M
+)
+summary_tbl
+write_csv(summary_tbl, file.path(OUT_DIR, "bio_summary_final.csv"))
+
+# top tables (no geom)
+top_species_tbl <- inat_beach_clean |> st_drop_geometry() |>
+  count(scientific_name, sort=TRUE) |> slice_head(n=10)
+top_observers_tbl <- inat_beach_clean |> st_drop_geometry() |>
+  count(user_login, sort=TRUE) |> slice_head(n=10)
+write_csv(top_species_tbl,  file.path(OUT_DIR,"top_species.csv"))
+write_csv(top_observers_tbl,file.path(OUT_DIR,"top_observers.csv"))
+
+# monthly trend
+if ("observed_on" %in% names(inat_beach_clean)) {
+  monthly <- inat_beach_clean |> st_drop_geometry() |>
+    mutate(date = as.Date(observed_on)) |> filter(!is.na(date)) |>
+    count(month = lubridate::floor_date(date, "month"))
+  ggplot(monthly, aes(month, n)) + geom_col() +
+    scale_x_date(date_labels="%Y-%m", date_breaks="1 month", expand=c(0.01,0.01)) +
+    labs(x="Month", y="Observations", title="iNaturalist observations per month") +
+    theme_minimal() + theme(axis.text.x=element_text(angle=45, hjust=1))
+}
+
+# category summary
+cat_summary <- inat_beach_clean |> st_drop_geometry() |>
+  count(category, name="observations") |> arrange(desc(observations))
+write_csv(cat_summary, file.path(OUT_DIR,"category_summary.csv"))
+```
+
+# 5) Multi-area summary (BIA vs Woodbine vs AOI)
+```{r}
+# ensure bia + beach polygons exist (if loaded from cache previously)
+if (!exists("beach_bia") || !exists("beach")){
+  bia   <- safe_read_sf(resolved$bia)
+  green <- safe_read_sf(resolved$green)
+  char_cols <- names(bia)[vapply(bia, function(x) is.character(x)||is.factor(x), logical(1))]
+  pat <- regex("(^|\\b)(the\\s+beach|beaches|beach)(\\b|$)", ignore_case=TRUE)
+  hits <- sapply(char_cols, function(col) sum(str_detect(as.character(bia[[col]]), pat), na.rm=TRUE))
+  beach_bia <- if (length(hits) && max(hits) > 0){
+    best <- names(which.max(hits)); bia[str_detect(as.character(bia[[best]]), pat), ]
+  } else bia
+  cc <- names(green)[vapply(green, function(x) is.character(x)||is.factor(x), logical(1))]
+  idx <- Reduce(`|`, lapply(cc, function(col) str_detect(tolower(green[[col]]), "woodbine")))
+  beach <- green[idx,]
+}
+
+summarise_area <- function(name, poly){
+  poly <- st_make_valid(poly)
+  a_ha <- st_area(st_transform(poly, AREA_CRS)) |> as.numeric() / 10000
+  inat_s  <- st_filter(inat_beach_clean, poly)
+  trees_s <- st_filter(trees_beach,     poly)
+  tibble(
+    area            = name,
+    total_obs       = nrow(inat_s),
+    unique_species  = if ("scientific_name" %in% names(inat_s)) n_distinct(inat_s$scientific_name) else NA_integer_,
+    tree_points     = nrow(trees_s),
+    area_ha         = round(sum(a_ha), 2),
+    species_per_ha  = round(n_distinct(inat_s$scientific_name) / sum(a_ha), 3)
+  )
+}
+
+summary_by_area <- bind_rows(
+  summarise_area("Beach BIA", beach_bia),
+  summarise_area("Woodbine Beach", beach),
+  summarise_area("AOI buffer (BIA∪Woodbine)", aoi_buf)
+)
+summary_by_area
+write_csv(summary_by_area, file.path(OUT_DIR,"bio_summary_by_area.csv"))
+```
+
+# 6) Neighbourhood richness + choropleth
+```{r}
+# load neighbourhoods
+neigh <- safe_read_sf(resolved$neigh)
+
+# clip to AOI
+neigh_clip <- suppressWarnings(st_intersection(st_make_valid(neigh), st_make_valid(aoi_buf)))
+
+# guess neighbourhood name column
+neigh_name_col <- names(neigh_clip)[stringr::str_detect(names(neigh_clip),
+                          stringr::regex("NAME|NEIGH|AREA", TRUE))][1]
+if (is.na(neigh_name_col)) neigh_name_col <- names(neigh_clip)[1]
+
+# join iNat to neighbourhoods
+inat_neigh <- st_join(inat_beach_clean, neigh_clip, left = FALSE)
+
+# counts + species
+obs_by_neigh <- inat_neigh %>% st_drop_geometry() %>%
+  count(neigh = .data[[neigh_name_col]], name = "obs")
+
+sp_by_neigh <- inat_neigh %>% st_drop_geometry() %>%
+  group_by(neigh = .data[[neigh_name_col]]) %>%
+  summarise(unique_species = dplyr::n_distinct(.data$scientific_name), .groups="drop")
+
+# area
+neigh_area <- neigh_clip %>%
+  mutate(area_ha = as.numeric(st_area(st_transform(., AREA_CRS)))/10000) %>%
+  st_drop_geometry() %>%
+  dplyr::select(neigh = .data[[neigh_name_col]], area_ha)
+
+# final table
+neigh_summary <- obs_by_neigh %>%
+  left_join(sp_by_neigh, by = "neigh") %>%
+  left_join(neigh_area,   by = "neigh") %>%
+  mutate(species_per_ha = round(unique_species/area_ha, 3)) %>%
+  arrange(desc(unique_species))
+write_csv(neigh_summary, file.path(OUT_DIR, "neighbourhood_biodiversity_summary.csv"))
+neigh_summary
+
+# merge back to polygons for map
+by_map <- setNames("neigh", neigh_name_col)   # map polygon col -> "neigh"
+neigh_poly_metric <- neigh_clip %>%
+  left_join(neigh_summary, by = by_map) %>%
+  mutate(
+    label_rich = paste0(
+      .data[[neigh_name_col]],
+      "<br>Species: ", ifelse(is.na(unique_species), 0, unique_species),
+      "<br>Area(ha): ", ifelse(is.na(area_ha), NA, round(area_ha,1)),
+      "<br>Sp/ha: ", ifelse(is.na(species_per_ha), NA, species_per_ha)
+    )
+  )
+
+pal_rich <- colorBin("YlGnBu", neigh_poly_metric$unique_species, bins = 6, na.color = "#cccccc")
+
+leaflet(options = leafletOptions(minZoom = 10)) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data = neigh_poly_metric,
+              fillColor = ~pal_rich(unique_species), color = "#555", weight = 1,
+              fillOpacity = 0.6, label = ~label_rich) %>%
+  addLegend("bottomright", pal = pal_rich, values = neigh_poly_metric$unique_species,
+            title = "Unique species (neighbourhood)")
+```
+
+# 7) Water proximity analysis
+```{r}
+# load water + clip to AOI
+water <- safe_read_sf(resolved$water)
+water_clip <- suppressWarnings(st_intersection(st_make_valid(water), st_make_valid(aoi_buf)))
+
+# buffer near water
+WATER_BUF_M <- 20
+water_buf <- st_transform(water_clip, AREA_CRS) %>% st_buffer(WATER_BUF_M) %>% st_transform(4326)
+
+# tag near/away
+near_flag <- inat_beach_clean %>%
+  mutate(near_water = lengths(st_intersects(., water_buf)) > 0) %>%
+  st_drop_geometry() %>%
+  count(category, near_water) %>%
+  tidyr::pivot_wider(names_from = near_water, values_from = n, values_fill = 0) %>%
+  rename(away = `FALSE`, near = `TRUE`) %>%
+  mutate(share_near = round(near / (near + away), 3))
+
+share_near_overall <- round(sum(near_flag$near) / sum(near_flag$near + near_flag$away), 3)
+
+write_csv(near_flag, file.path(OUT_DIR, "near_water_by_category.csv"))
+tibble(overall_share_near = share_near_overall)
+near_flag
+```
+
+# 8) Map — category layers + trees
+```{r}
+m <- leaflet(options = leafletOptions(minZoom=10)) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data=aoi_buf, label="AOI (BIA ∪ Woodbine) buffer",
+              color="#444", weight=2, fillOpacity=0.05) %>%
+  addCircleMarkers(data=inat_beach_clean |> filter(category=="Plants"),
+                   radius=2, color="#2ca25f", stroke=FALSE, fillOpacity=0.9, group="Plants") %>%
+  addCircleMarkers(data=inat_beach_clean |> filter(category=="Birds"),
+                   radius=2, color="#3182bd", stroke=FALSE, fillOpacity=0.9, group="Birds") %>%
+  addCircleMarkers(data=inat_beach_clean |> filter(category=="Insects"),
+                   radius=2, color="#fd8d3c", stroke=FALSE, fillOpacity=0.9, group="Insects") %>%
+  addCircleMarkers(data=inat_beach_clean |> filter(category=="Mammals"),
+                   radius=2, color="#756bb1", stroke=FALSE, fillOpacity=0.9, group="Mammals") %>%
+  addCircleMarkers(data=inat_beach_clean |> filter(category=="Other"),
+                   radius=2, color="#636363", stroke=FALSE, fillOpacity=0.8, group="Other") %>%
+  addCircleMarkers(data=trees_beach, radius=2, color="green", stroke=FALSE,
+                   fillOpacity=0.6, group="Trees") %>%
+  addLayersControl(overlayGroups=c("Plants","Birds","Insects","Mammals","Other","Trees"),
+                   options=layersControlOptions(collapsed=FALSE)) %>%
+  addLegend("bottomright",
+            colors=c("#2ca25f","#3182bd","#fd8d3c","#756bb1","#636363","green"),
+            labels=c("Plants","Birds","Insects","Mammals","Other","Trees"),
+            title="Layers")
+m
+htmlwidgets::saveWidget(m, file.path(OUT_DIR,"biodiversity_map_consolidated.html"), selfcontained=TRUE)
+
+# optional heatmap if leaflet.extras available
+if (requireNamespace("leaflet.extras", quietly = TRUE)) {
+  m_heat <- leaflet(options = leafletOptions(minZoom=10)) %>%
+    addProviderTiles("CartoDB.Positron") %>%
+    addPolygons(data=aoi_buf, label="AOI (BIA ∪ Woodbine) buffer",
+                color="#444", weight=2, fillOpacity=0.05) %>%
+    leaflet.extras::addHeatmap(data = inat_beach_clean, blur = 15, max = 0.6, radius = 10)
+  htmlwidgets::saveWidget(m_heat, file.path(OUT_DIR,"biodiversity_map_with_heat.html"), selfcontained=TRUE)
+}
+```
+
+# 9) Map — Top-10 species (each as a layer)
+```{r}
+top10_species <- inat_beach_clean |> st_drop_geometry() |>
+  count(scientific_name, sort=TRUE) |> slice_head(n=10) |> pull(scientific_name)
+inat_top <- inat_beach_clean |> filter(scientific_name %in% top10_species)
+
+pal_sp <- colorFactor("Set1", domain = sort(unique(inat_top$scientific_name)))
+popup_sp <- ~paste0(
+  "<b>", scientific_name, "</b>",
+  if ("observed_on" %in% names(inat_top)) paste0("<br/>Date: ", observed_on) else "",
+  if ("user_login"  %in% names(inat_top)) paste0("<br/>Observer: ", user_login) else ""
+)
+species_groups <- sort(unique(inat_top$scientific_name))
+
+m_top <- leaflet(options = leafletOptions(minZoom=10)) %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addPolygons(data=aoi_buf, label="AOI (BIA ∪ Woodbine) buffer",
+              color="#444", weight=2, fillOpacity=0.05)
+
+for (sp in species_groups) {
+  m_top <- m_top %>%
+    addCircleMarkers(
+      data = inat_top |> filter(scientific_name == sp),
+      radius = 3, color = pal_sp(sp), stroke = FALSE, fillOpacity = 0.9,
+      popup = popup_sp, group = sp,
+      clusterOptions = markerClusterOptions(spiderfyOnMaxZoom = TRUE)
+    )
+}
+
+m_top <- m_top %>%
+  addLayersControl(overlayGroups = c(species_groups),
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  addLegend("bottomright", pal = pal_sp, values = ~scientific_name,
+            data = inat_top, title = "Top 10 species")
+
+m_top
+htmlwidgets::saveWidget(m_top, file.path(OUT_DIR,"biodiversity_map_top10_species.html"), selfcontained=TRUE)
+```
+
+
+# 10) Top-5 species by area (tables)
+```{r}
+areas_list <- list(
+  `Beach BIA` = beach_bia,
+  `Woodbine Beach` = beach,
+  `AOI buffer (BIA∪Woodbine)` = aoi_buf
+)
+
+topN_area <- function(poly, N=5){
+  pts <- st_filter(inat_beach_clean, poly)
+  pts %>% st_drop_geometry() %>%
+    count(scientific_name, sort=TRUE) %>% slice_head(n=N)
+}
+
+top_by_area <- purrr::imap(areas_list, ~ topN_area(.x, N=5) %>% mutate(area = .y)) %>%
+  bind_rows() %>% relocate(area)
+readr::write_csv(top_by_area, file.path(OUT_DIR, "top5_species_by_area.csv"))
+top_by_area
+```
+
+# 11) Checklist + Data dictionary
+```{r}
+# checklist
+tibble(
+  item = c(
+    "AOI = BIA ∪ Woodbine + buffer",
+    "CRS unified (EPSG:4326)",
+    "iNat QA (de-dup) + optional research-grade",
+    "iNat + Trees filtered by AOI",
+    "Monthly trend chart",
+    "Category layers map + optional heatmap",
+    "Multi-area summary (BIA/Woodbine/AOI)",
+    "Neighbourhood richness + choropleth",
+    "Near-water category shares",
+    "Top-10 species layered map",
+    "Top-5 species by area tables",
+    "All outputs saved in /outputs"
+  ),
+  done = TRUE
+)
+
+# mini data dictionary
+dict <- tibble::tribble(
+  ~file, ~column, ~meaning,
+  "bio_summary_final.csv","total_obs","iNat obs inside AOI",
+  "bio_summary_final.csv","unique_species","distinct scientific_name",
+  "bio_summary_final.csv","tree_points","tree records inside AOI",
+  "bio_summary_final.csv","area_ha","AOI area (hectares)",
+  "bio_summary_final.csv","species_per_ha","unique_species / area_ha",
+  "bio_summary_final.csv","aoi_buffer_m","AOI buffer used (meters)",
+  "neighbourhood_biodiversity_summary.csv","neigh","neighbourhood name",
+  "neighbourhood_biodiversity_summary.csv","unique_species","species within neighbourhood∩AOI",
+  "neighbourhood_biodiversity_summary.csv","area_ha","neighbourhood area in AOI (ha)",
+  "neighbourhood_biodiversity_summary.csv","species_per_ha","unique_species / area_ha",
+  "near_water_by_category.csv","category","Plants/Birds/Insects/Mammals/Other",
+  "near_water_by_category.csv","near/away","counts within 20 m of water vs outside",
+  "near_water_by_category.csv","share_near","near / (near+away)",
+  "top5_species_by_area.csv","area","BIA/Woodbine/AOI",
+  "top5_species_by_area.csv","scientific_name","species name",
+  "top5_species_by_area.csv","n","observation count"
+)
+readr::write_csv(dict, file.path(OUT_DIR, "outputs_data_dictionary.csv"))
+```
