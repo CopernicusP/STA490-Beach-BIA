@@ -102,7 +102,9 @@ m %>% addLayersControl(overlayGroups = groups,
 ```{r}
 # Adding time filter for iNaturalist observations
 start_date <- as.Date("2020-01-01")
-end_date <- as.Date(readline("Enter an end date (YYYY-MM-DD): "))
+end_date <- Sys.Date()
+# For a user input end date
+# end_date <- as.Date(readline("Enter an end date (YYYY-MM-DD): "))
 
 obs_within_time <- obs_within %>%
   filter(as.Date(observed_on) <= end_date)
@@ -117,6 +119,38 @@ leaflet(the_beaches) %>% addProviderTiles("CartoDB.Positron") %>%
              popup = ~paste0(obs_within_time$category, "<br>",
                              "Observed on:  ", obs_within_time$observed_on))
 ```
+
+
+```{r}
+# Filter observations by year
+obs_within <- obs_within %>% 
+  mutate(year_obs = format(as.Date(observed_on), "%Y"))
+
+obs_within$year_obs <- as.factor(obs_within$year_obs)
+years <- levels(obs_within$year_obs)
+
+year.pal <- colorFactor("magma", domain = years)
+m1 <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = the_beaches,
+              color = "lightblue")
+
+for (i in years) {
+  m1 <- m1 %>% addCircles(data = subset(obs_within, year_obs == i),
+                          group = i,
+                          color = ~year.pal(year_obs),
+                          opacity = 1,
+                          radius = 1,
+                          weight = 4)
+}
+
+m1 <- m1 %>% addLegend("bottomright", pal = year.pal,
+                       values = obs_within$year_obs,
+                       opacity = 1) %>% 
+  addLayersControl(position = "topright", overlayGroups = years,
+                   options = layersControlOptions(collapsed = FALSE))
+m1
+```
+
 
 
 ```{r}
