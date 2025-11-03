@@ -30,6 +30,8 @@ trees <- st_read(paste0(data.dir, "/data/trees/CROPPED_TOPO_TREE_WGS84.shp"))
 inaturalist_df <- read.csv(paste0(data.dir, "/data/inaturalist/observations.csv"))
 
 water <- st_read(paste0(data.dir, "/data/waterbodies/TOPO_Waterbody_WGS84.shp"))
+
+nbhd <- st_read(paste0(data.dir, "/data/neighbourhoods/Neighbourhoods - 4326.shp"))
 ```
 
 
@@ -204,5 +206,19 @@ m %>% addLayersControl(overlayGroups = groups,
   addLegend("bottomleft", pal = species_cat.pal,
             values = obs_within$iconic_taxon_name,
             opacity = 1)
+```
+
+
+```{r}
+# Defined new BIA areas
+the_beaches <- nbhd %>% filter(X_id1 == 93)
+
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data=the_beaches)
+```
+
+
+```{r}
+
 ```
 
