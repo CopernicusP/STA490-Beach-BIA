@@ -11,6 +11,8 @@ output:
     toc: true
 ---
 
+> _Synced to the `main` branch to keep the consolidated biodiversity analysis up-to-date._
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = FALSE)
 suppressPackageStartupMessages({
