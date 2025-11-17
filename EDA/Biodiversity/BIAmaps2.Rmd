@@ -19,17 +19,15 @@ library(dplyr)
 
 
 ```{r}
-data.dir <- gsub('/code', '/data', getwd())
+nbhd <- st_read("../../Data/neighbourhoods/Neighbourhoods - 4326.shp")
 
-nbhd <- st_read(paste0(data.dir, "/data/neighbourhoods/Neighbourhoods - 4326.shp"))
+trees <- st_read("../../Data/trees/TOPO_TREE_WGS84.shp")
 
-trees <- st_read(paste0(data.dir, "/data/trees/TOPO_TREE_WGS84.shp"))
+inaturalist_df <- read.csv("../../Data/inaturalist/observations.csv")
 
-inaturalist_df <- read.csv(paste0(data.dir, "/data/inaturalist/observations.csv"))
+water <- st_read("../../Data/waterbodies/TOPO_Waterbody_WGS84.shp")
 
-water <- st_read(paste0(data.dir, "/data/waterbodies/TOPO_Waterbody_WGS84.shp"))
-
-green <- st_read(paste0(data.dir, "/data/greenspace/Green Spaces - 4326.shp"))
+green <- st_read("../../Data/greenspace/Green Spaces - 4326.shp")
 ```
 
 
