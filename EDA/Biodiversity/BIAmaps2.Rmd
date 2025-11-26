@@ -15,21 +15,23 @@ knitr::opts_chunk$set(echo = TRUE)
 library(sf)
 library(leaflet)
 library(dplyr)
+library(spatstat)
+library(terra)
 ```
 
 
 ```{r}
-data.dir <- gsub('/code', '/data', getwd())
+nbhd <- st_read("../../Data/neighbourhoods/Neighbourhoods - 4326.shp")
 
-nbhd <- st_read(paste0(data.dir, "/data/neighbourhoods/Neighbourhoods - 4326.shp"))
+trees <- st_read("../../Data/trees/TOPO_TREE_WGS84.shp")
 
-trees <- st_read(paste0(data.dir, "/data/trees/TOPO_TREE_WGS84.shp"))
+inaturalist_df <- read.csv("../../Data/inaturalist/observations.csv")
 
-inaturalist_df <- read.csv(paste0(data.dir, "/data/inaturalist/observations.csv"))
+water <- st_read("../../Data/waterbodies/TOPO_Waterbody_WGS84.shp")
 
-water <- st_read(paste0(data.dir, "/data/waterbodies/TOPO_Waterbody_WGS84.shp"))
+green <- st_read("../../Data/greenspace/Green Spaces - 4326.shp")
 
-green <- st_read(paste0(data.dir, "/data/greenspace/Green Spaces - 4326.shp"))
+bia <- st_read("../../Data/bia/Business Improvement Areas Data - 4326.shp")
 ```
 
 
@@ -208,6 +210,49 @@ leaflet() %>% addProviderTiles("CartoDB.Positron") %>%
                    overlayGroups = c("iNaturalist", "Trees", "Waterbodies",
                                      "Green Spaces"),
                    options = layersControlOptions(collapsed = FALSE))
+```
+
+
+```{r}
+# density of trees
+bia_strip <- bia %>% filter(X_id1 == 10)
+
+strip_proj <- st_transform(bia_strip, 32617)
+tree_strip_proj <- st_transform(trees_in_strip, 32617)
+
+# 1) simple count within polygon
+trees_in_strip <- st_filter(trees, bia_strip, .predicate = st_within)
+strip_count <- nrow(trees_in_strip)
+strip_density <- strip_count / as.numeric(st_area(strip_proj) / 1000000)
+
+# 2)
+win <- as.owin(strip_proj)
+coords <- st_coordinates(tree_strip_proj)
+pp <- ppp(coords[,1], coords[,2], window = win)
+
+density_kde <- density.ppp(pp, sigma = bw.diggle(pp), edge = TRUE)
+r <- rast(density_kde)
+
+poly_sp <- vect(strip_proj)
+r_masked <- mask(r, poly_sp)
+
+global(r_masked, "mean", na.rm = TRUE)
+global(r_masked, "sum", na.rm = TRUE)
+
+plot(r_masked)
+plot(strip_proj$geometry, add = TRUE, border = "red", lwd = 2)
+```
+
+```{r}
+beach_proj <- st_transform(the_beaches, 32617)
+leaflet(bia_strip) %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons() %>% 
+  addCircles(data = trees_in_strip,
+             opacity = 1,
+             color = "darkgreen",
+             radius = 1,
+             weight = 2,
+             group = "Trees")
 ```
 
 
