@@ -1,0 +1,468 @@
+install.packages('opendatatoronto')
+install.packages('dplyr')
+install.packages('tidygeocoder')
+install.packages('sf')
+library(opendatatoronto)
+library(dplyr)
+library(sf)
+library(tidygeocoder)
+library(leaflet)
+
+# Extracting the Locations of the Bike Stops in the Beach BIA: 
+
+# neighbourhoods <- st_read("Neighbourhoods - 4326.geojson")
+
+# bike_data_01_2023 <- read.csv("Bike Share 01-2023.csv")
+# bike_data_02_2023 <- read.csv("Bike Share 02-2023.csv")
+
+# stations_01_2023 <- data.frame(name = unique(bike_data_01_2023$Start.Station.Name))
+# stations_02_2023 <- data.frame(name = unique(bike_data_02_2023$Start.Station.Name))
+
+# stations_geo_01_2023 <- stations_01_2023 %>%
+#  geocode(address = name, method = "osm", long = longitude, lat = latitude) 
+# stations_geo_clean_01_2023 <- na.omit(stations_geo_01_2023)
+
+# stations_geo_02_2023 <- stations_02_2023 %>%
+#   geocode(address = name, method = "osm", long = longitude, lat = latitude) 
+# stations_geo_clean_02_2023 <- na.omit(stations_geo_02_2023)
+
+# stations_sf_01_2023 <- st_as_sf(
+#   stations_geo_clean_01_2023,
+#   coords = c("longitude", "latitude"), 
+#   crs = 4326  
+# )
+# stations_sf_02_2023 <- st_as_sf(
+#   stations_geo_clean_02_2023,
+#   coords = c("longitude", "latitude"), 
+#   crs = 4326  
+# )
+
+# beach_bia_01_2023 <- neighbourhoods %>% 
+#   filter(AREA_SHORT_CODE == "063")
+# beach_stations_01_2023 <- st_join(stations_sf_01_2023, beach_bia_01_2023, join = st_within)
+# beach_stations_01_2023 <- beach_stations_01_2023 %>% filter(!is.na(AREA_NAME))
+
+# beach_bia_02_2023 <- neighbourhoods %>% 
+#   filter(AREA_SHORT_CODE == "063")
+# beach_stations_02_2023 <- st_join(stations_sf_02_2023, beach_bia_01_2023, join = st_within)
+# beach_stations_02_2023 <- beach_stations_02_2023 %>% filter(!is.na(AREA_NAME))
+
+# leaflet() %>%
+#   addProviderTiles("CartoDB.Positron") %>%
+#   addPolygons(
+#     data = beach_bia_01_2023,
+#     fillColor = "lightblue",
+#     color = "blue",
+#     fillOpacity = 0.3,
+#     label = ~AREA_NAME
+#   ) %>%
+#   addCircleMarkers(
+#     data = beach_stations_01_2023,
+#     color = "red",
+#     fillOpacity = 0.9,
+#     radius = 5,
+#     popup = ~name
+#   )
+
+# NAMES OF BIKE STATIONS IN BEACHES
+# (Some repeats due to "Rd" vs "Rd.", etc.)
+beach_stations <- c('Coxwell Ave /  Lake Shore Blvd E', 'Lake Shore Blvd E / Knox Ave',
+                    'Hubbard Blvd / Balsam Av', 'Kingston Rd / Beech Ave',
+                    'Queen St. E / Eastern Ave', 'Woodbine Ave / Lake Shore Blvd E',
+                    'Southwood Dr / Kingston Rd - SMART', 'Queen St. E / Spruce Hill Rd',
+                    'Hubbard Blvd. / Glen Manor Dr', 'Queen St E / Hammersmith Ave',
+                    
+                    'Queen St. E / Spruce Hill Rd.', 'Lower Coxwell Ave /  Lake Shore Blvd E')
+
+# UPLOADING THE DATA
+# Filtering Start & End Stations in the Beaches:
+
+# 2021
+file_list <- list.files(pattern = "Bike Share .*2021.csv")
+
+bike_2021_list <- lapply(file_list, read.csv)
+
+bike_2021_list <- lapply(bike_2021_list, function(df) {
+  df$Start.Station.Id <- suppressWarnings(as.integer(as.character(df$Start.Station.Id)))
+  df$End.Station.Id   <- suppressWarnings(as.integer(as.character(df$End.Station.Id)))
+  df$Bike.Id          <- suppressWarnings(as.integer(as.character(df$Bike.Id)))
+  df
+})
+
+bike_data_2021 <- dplyr::bind_rows(bike_2021_list) %>%
+  select(Trip..Duration, Start.Station.Name, End.Station.Name, User.Type, Start.Time) %>%
+  na.omit()
+
+trips_to_beach_2021 <- bike_data_2021 %>%
+  filter(End.Station.Name %in% beach_stations)
+
+trips_from_beach_2021 <- bike_data_2021 %>%
+  filter(Start.Station.Name %in% beach_stations)
+
+rm(bike_2021_list)
+rm(bike_data_2021)
+gc()
+
+
+# 2022
+file_list <- list.files(pattern = "Bike Share .*2022.csv")
+
+bike_2022_list <- lapply(file_list, read.csv)
+
+bike_data_2022 <- bind_rows(bike_2022_list) %>%
+  select(Trip..Duration, Start.Station.Name, End.Station.Name, User.Type, Start.Time)
+
+trips_to_beach_2022 <- bike_data_2022 %>%
+  filter(End.Station.Name %in% beach_stations)
+
+trips_from_beach_2022 <- bike_data_2022 %>%
+  filter(Start.Station.Name %in% beach_stations)
+
+rm(bike_2022_list)
+rm(bike_data_2022)
+gc()
+
+
+# 2023
+file_list <- list.files(pattern = "Bike Share .*2023.csv")
+
+bike_2023_list <- lapply(file_list, read.csv)
+
+bike_data_2023 <- bind_rows(bike_2023_list) %>%
+  select(Trip..Duration, Start.Station.Name, End.Station.Name, User.Type, Start.Time)
+
+trips_to_beach_2023 <- bike_data_2023 %>%
+  filter(End.Station.Name %in% beach_stations)
+
+trips_from_beach_2023 <- bike_data_2023 %>%
+  filter(Start.Station.Name %in% beach_stations)
+
+rm(bike_2023_list)
+rm(bike_data_2023)
+gc()
+
+
+# 2024
+file_list <- list.files(pattern = "Bike Share .*2024.csv")
+
+bike_2024_list <- lapply(file_list, read.csv)
+
+bike_2024_list <- lapply(bike_2024_list, function(df) {
+  df$Start.Station.Id <- suppressWarnings(as.integer(as.character(df$Start.Station.Id)))
+  df$End.Station.Id   <- suppressWarnings(as.integer(as.character(df$End.Station.Id)))
+  df$Bike.Id          <- suppressWarnings(as.integer(as.character(df$Bike.Id)))
+  df
+})
+
+bike_data_2024 <- bind_rows(bike_2024_list) %>%
+  select(Trip..Duration, Start.Station.Name, End.Station.Name, User.Type, Start.Time)
+
+trips_to_beach_2024 <- bike_data_2024 %>%
+  filter(End.Station.Name %in% beach_stations)
+
+trips_from_beach_2024 <- bike_data_2024 %>%
+  filter(Start.Station.Name %in% beach_stations)
+
+rm(bike_2024_list)
+rm(bike_data_2024)
+gc()
+
+trips_to_beach <- bind_rows(
+  trips_to_beach_2021,
+  trips_to_beach_2022,
+  trips_to_beach_2023,
+  trips_to_beach_2024)
+# rm(trips_to_beach_2021)
+# rm(trips_to_beach_2022)
+# rm(trips_to_beach_2023)
+# rm(trips_to_beach_2024)
+
+trips_from_beach <- bind_rows(
+  trips_from_beach_2021,
+  trips_from_beach_2022,
+  trips_from_beach_2023,
+  trips_from_beach_2024)
+# rm(trips_from_beach_2021)
+# rm(trips_from_beach_2022)
+# rm(trips_from_beach_2023)
+# rm(trips_from_beach_2024)
+
+
+# Creating Time Series Plot:
+
+trips_to_beach_2021 <- trips_to_beach_2021 %>%
+  select(Start.Time)
+
+trips_to_beach_2022 <- trips_to_beach_2022 %>%
+  select(Start.Time)
+
+trips_to_beach_2023 <- trips_to_beach_2023 %>%
+  select(Start.Time)
+
+trips_to_beach_2024 <- trips_to_beach_2024 %>%
+  select(Start.Time)
+
+dates_of_trips_to_beach <- bind_rows(
+  trips_to_beach_2021,
+  trips_to_beach_2022,
+  trips_to_beach_2023,
+  trips_to_beach_2024)
+
+dates_of_trips_to_beach <- dates_of_trips_to_beach %>%
+  mutate(Start.Time = mdy_hm(Start.Time))
+daily_trips <- dates_of_trips_to_beach %>%
+  mutate(Date = as_date(Start.Time)) %>%
+  group_by(Date) %>%
+  summarise(Trip_Count = n())
+
+ggplot(daily_trips, aes(x = Date, y = Trip_Count)) +
+  geom_line(color = "steelblue", linewidth = 0.8) +
+  coord_cartesian(ylim = c(0, max(daily_trips$Trip_Count) * 1.1)) +
+  labs(
+    title = "Daily Trips to the Beach (2021–2024)",
+    x = "Time",
+    y = "Number of Trips"
+  ) +
+  theme_minimal(base_size = 12) + 
+  theme(
+    text = element_text(family = "Georgia"),  
+    plot.title = element_text(size = 18),  
+    axis.title = element_text(size = 14),                
+    axis.text = element_text(size = 12))
+
+
+# Creating Hourly Plot: 
+
+trips_to_beach <- trips_to_beach %>%
+  mutate(
+    Start_Time_trim = trimws(Start.Time),
+    Start_Time = case_when(
+      as.numeric(sub("^\\d{2}/(\\d{2})/\\d{4}.*", "\\1", Start_Time_trim)) > 12 ~
+        mdy_hm(Start_Time_trim),
+      TRUE ~ dmy_hm(Start_Time_trim)
+    )
+  )
+
+hourly_counts <- trips_to_beach %>%
+  mutate(hour = hour(Start_Time)) %>%
+  count(hour)
+
+ggplot(hourly_counts, aes(x = hour, y = n)) +
+  geom_col(aes(fill = n)) + 
+  coord_polar(start = 0 - pi/24) +
+  scale_fill_gradient(
+    low = "#B0E0E6",   
+    high = "#1A237E", 
+    name = "Number of Trips"
+  ) +
+  scale_x_continuous(
+    breaks = 0:23,
+    labels = c("12 AM","1 AM","2 AM","3 AM","4 AM","5 AM","6 AM","7 AM",
+               "8 AM","9 AM","10 AM","11 AM",
+               "12 PM","1 PM","2 PM","3 PM","4 PM","5 PM","6 PM","7 PM",
+               "8 PM","9 PM","10 PM","11 PM")
+  ) +
+  labs(
+    title = "Hourly Distribution of Trips",
+    x = "Time of Day",
+    y = "Number of Trips"
+  ) +
+  theme_minimal(base_size = 14) + 
+  theme(
+    axis.text.y = element_blank()) +
+  theme(
+    text = element_text(family = "Georgia"),  
+    plot.title = element_text(size = 18),  
+    axis.title = element_text(size = 14),                
+    axis.text = element_text(size = 12))
+
+
+# Creating Spatial Plot: 
+subway_beach_stations <- c(
+  "Coxwell Ave /  Lake Shore Blvd E",
+  "Woodbine Ave / Lake Shore Blvd E"
+)
+
+trips_to_beach$Start.Station.Name <- iconv(
+  trips_to_beach$Start.Station.Name,
+  from = "",      
+  to   = "UTF-8",   
+  sub  = "?"       
+)
+
+start_stations_trips_to_beach <- trips_to_beach %>%
+  filter(!is.na(Start.Station.Name), Start.Station.Name != "", Start.Station.Name != "NULL") %>%
+  distinct(Start.Station.Name) %>%
+  rename(name = Start.Station.Name)
+
+start_geo_trips_to_beach <- start_stations_trips_to_beach %>%
+  geocode(address = name, method = "osm", long = longitude, lat = latitude) %>%
+  filter(!is.na(longitude) & !is.na(latitude))
+
+start_sf_trips_to_beach <- st_as_sf(start_geo_trips_to_beach,
+  coords = c("longitude", "latitude"),
+  crs = 4326  
+)
+
+start_station_counts <- trips_to_beach %>%
+  filter(!is.na(Start.Station.Name), Start.Station.Name != "", Start.Station.Name != "NULL") %>%
+  group_by(Start.Station.Name) %>%
+  summarise(trip_count = n())
+
+start_sf_trips_to_beach <- start_sf_trips_to_beach %>%
+  distinct(name, .keep_all = TRUE) %>%
+  left_join(start_station_counts, by = c("name" = "Start.Station.Name"))
+
+start_sf_trips_to_beach <- start_sf_trips_to_beach %>%
+  filter(
+    st_coordinates(.)[,1] > -80,
+    st_coordinates(.)[,1] < -78,
+    st_coordinates(.)[,2] > 43,
+    st_coordinates(.)[,2] < 44
+  )
+
+pal <- colorNumeric(
+  palette = "YlOrRd",           
+  domain = start_sf_trips_to_beach$trip_count,
+  na.color = "gray"
+)
+
+leaflet(start_sf_trips_to_beach) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    popup = ~paste0("<b>", name, "</b><br>Trips: ", trip_count),
+    color = ~pal(trip_count),
+    radius = ~pmax(3, log(trip_count + 1) * 2),
+    fillOpacity = 0.9,
+    stroke = FALSE
+  ) %>%
+  addCircleMarkers(
+    data = subset(start_sf_trips_to_beach, name %in% subway_beach_stations),
+    radius = ~pmax(3, log(trip_count + 1) * 2) + 3,   
+    fillOpacity = 0,                                
+    color = "blue",                          
+    weight = 3
+  ) %>%
+  
+  addLegend(
+    position = "bottomright",
+    pal = pal,
+    values = ~trip_count,
+    title = "Number of Trips"
+  ) %>%
+  addLegend(
+    position = "bottomright",
+    colors = "blue",
+    labels = "Subway Adjacent Stations",
+    opacity = 1,
+    title = NULL
+  )
+
+
+end_stations_trips_from_beach <- trips_from_beach %>%
+  filter(!is.na(End.Station.Name), End.Station.Name != "", End.Station.Name != "NULL") %>%
+  distinct(End.Station.Name) %>%
+  rename(name = End.Station.Name)
+
+end_stations_trips_from_beach$name <- iconv(end_stations_trips_from_beach$name, to = "UTF-8", sub = "")
+
+end_geo_trips_from_beach <- end_stations_trips_from_beach %>%
+  geocode(address = name, method = "osm", long = longitude, lat = latitude) %>%
+  filter(!is.na(longitude) & !is.na(latitude))
+
+end_sf_trips_from_beach <- st_as_sf(end_geo_trips_from_beach,
+                                         coords = c("longitude", "latitude"),
+                                         crs = 4326  
+)
+
+end_station_counts <- trips_from_beach %>%
+  filter(!is.na(End.Station.Name), End.Station.Name != "", End.Station.Name != "NULL") %>%
+  group_by(End.Station.Name) %>%
+  summarise(trip_count = n())
+
+end_sf_trips_from_beach <- end_sf_trips_from_beach %>%
+  distinct(name, .keep_all = TRUE) %>%
+  left_join(end_station_counts, by = c("name" = "End.Station.Name"))
+
+end_sf_trips_from_beach <- end_sf_trips_from_beach %>%
+  filter(
+    st_coordinates(.)[,1] > -80,
+    st_coordinates(.)[,1] < -78,
+    st_coordinates(.)[,2] > 43,
+    st_coordinates(.)[,2] < 44
+  )
+end_sf_trips_from_beach <- na.omit(end_sf_trips_from_beach)
+
+pal <- colorNumeric(
+  palette = "YlOrRd",           
+  domain = end_sf_trips_from_beach$trip_count,
+  na.color = "gray"
+)
+
+leaflet(end_sf_trips_from_beach) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%  
+  addCircleMarkers(
+    popup = ~paste0("<b>", name, "</b><br>Trips: ", trip_count),
+    color = ~pal(trip_count),
+    radius = ~pmax(3, log(trip_count + 1) * 2),  
+    fillOpacity = 0.9,
+    stroke = FALSE
+  ) %>%
+  addCircleMarkers(
+    data = subset(start_sf_trips_to_beach, name %in% subway_beach_stations),
+    radius = ~pmax(3, log(trip_count + 1) * 2) + 3,   
+    fillOpacity = 0,                                
+    color = "blue",                          
+    weight = 3
+  ) %>%
+  addLegend(
+    position = "bottomright",
+    pal = pal,
+    values = ~trip_count,
+    title = "Number of Trips"
+  )  %>%
+  addLegend(
+    position = "bottomright",
+    colors = "blue",
+    labels = "Subway Adjacent Stations",
+    opacity = 1,
+    title = NULL
+  )
+
+# ATTRIBUTES OF DATA 
+# Bike Customer Breakdown:
+user_breakdown <- trips_to_beach %>%
+  count(User.Type) %>%
+  mutate(prop = n / sum(n) * 100)
+
+ggplot(user_breakdown, aes(x = "", y = prop, fill = User.Type)) +
+  geom_col(width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  theme_void() +
+  labs(title = "Distribution of User Types") +
+  geom_text(aes(label = paste0(round(prop, 1), "%")),
+            position = position_stack(vjust = 0.5),
+            size = 4) +
+  scale_fill_manual(values = c("#a6cee3", "#fbb4ae"))
+
+
+# Trip Duration Breakdown:
+ggplot(trips_to_beach, aes(x = Trip..Duration)) +
+  geom_histogram(binwidth = 100, fill = "#a6cee3", color = "white") +
+  coord_cartesian(xlim = c(0, 8000)) +
+  labs(
+    title = "Distribution of Trip Durations",
+    x = "Trip Duration (seconds)",
+    y = "Number of Trips"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank()) +
+  theme(
+    text = element_text(family = "Georgia"),  
+    plot.title = element_text(size = 18),  
+    axis.title = element_text(size = 14),                
+    axis.text = element_text(size = 12))
+
+
+
