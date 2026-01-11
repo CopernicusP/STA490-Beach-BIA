@@ -1,22 +1,16 @@
-# STA490-Beach-BIA
-Beach BIA — 311 Complaints
+# STA490 - Beach BIA - 311 Complaints
 Short exploratory analysis of 311 complaints around Toronto’s The Beaches area, combining:
+Add intro
 
+main goal:
+
+data:
 311 Complaints from 2022 to 2025 (CSV)
-Outputs include quick stats and tidy CSVs.
 
-Repo layout
-. ├─ Dataset/ # raw data (CSV/SHP/GeoJSON) ├─ outputs/ # auto-generated tables & maps ├─ Beach_BIA_Biodiversity_CONSOLIDATED.Rmd # main analysis └─ README.md
+language:
+use R
 
-Data (expected filenames)
-Dataset/SR2022.csv (fallback: observations-624727.csv or observations.csv)
-Dataset/Business Improvement Areas Data - 4326.shp (+ .dbf/.shx/.prj)
-Dataset/Green Spaces - 4326.shp (+ sidecars)
-Dataset/Neighbourhoods - 4326.shp (+ sidecars)
-Dataset/TOPO_TREE_WGS84.shp (+ sidecars)
-Dataset/TOPO_Waterbody_WGS84.shp (+ sidecars)
-Optional: Dataset/WoodbineBeach.shp
-The Rmd searches in getwd()/Dataset, getwd()/data, getwd(), and /mnt/data.
+tidy
 
 How to run
 Open the project in RStudio.
