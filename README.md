@@ -1,49 +1,3 @@
-# STA490 - Beach BIA - 311 Complaints
-Short exploratory analysis of 311 complaints around Toronto’s The Beaches area, combining:
-Add intro
-
-Main Goal:
-Identify the most common types of complaints.
-Examine whether there are temporal or seasonal patterns.
-This study investigates 311 complaints within the Beach BIA area to understand public service needs and local infrastructure challenges.
-
-data:
-311 Complaints from 2022 to 2025 (CSV)
-
-language:
-use R
-
-tidy
-
-How to run
-Open the project in RStudio.
-Open Beach_BIA_Biodiversity_CONSOLIDATED.Rmd.
-Click Knit (HTML), or run
-Results are written to outputs/.
-Required R packages
-sf, dplyr, readr, stringr, janitor, glue, leaflet, purrr, ggplot2, lubridate, tibble, tidyr, htmlwidgets, rlang
-
-Parameters
-AOI_BUFFER_M = 30 (area-of-interest buffer)
-
-WATER_BUF_M = 20 (near-water proximity)
-
-Key outputs (all in outputs/)
-Tables (CSV):
-bio_summary_final.csv — totals, area (ha), species/ha
-
-bio_summary_by_area.csv — BIA / Woodbine / AOI (and neighbourhood if present)
-
-category_summary.csv — obs by category
-
-top_species.csv, top_observers.csv
-
-Notes on data updates
-If you add a newer complaints CSV, keep the naming pattern (e.g., 2026SR.csv).
-
-
-
-
 # Toronto 311 Complaints Analysis (Beach BIA Case Study)
 
 This project analyzes Toronto 311 service request data with a focus on the **Beach BIA area**, aiming to understand complaint patterns, temporal trends, and category-level distributions of municipal service requests.
@@ -69,10 +23,11 @@ This project focuses on the **Beach BIA** as a case study to explore how complai
 - **Toronto Open Data Portal – 311 Service Requests**
 - Data includes:
   - Request creation date
-  - Major complaint category
-  - Service section
+  - Division
   - Location (postal code / geographic reference)
-  - Status and service type
+  - Status (open / closed)
+  - Service request type
+  - ...
 
 > Data were cleaned, filtered, and aggregated for analysis.  
 > Only relevant records within the Beach BIA boundary were retained.
@@ -109,6 +64,9 @@ This project focuses on the **Beach BIA** as a case study to explore how complai
 - A small number of service sections account for a large share of total complaints.
 - Complaint volumes exhibit clear temporal variation, suggesting seasonal or event-driven effects.
 - Bike-related and transportation complaints represent a relatively small but distinct subset of total requests.
+<img width="722" height="493" alt="image" src="https://github.com/user-attachments/assets/22b629aa-c922-4c57-b788-0b8ee599bca0" />
+<img width="956" height="464" alt="image" src="https://github.com/user-attachments/assets/84bac603-9e9a-40a4-aa80-43701bd41635" />
+<img width="1115" height="595" alt="image" src="https://github.com/user-attachments/assets/f3ffaec2-e320-4f5f-8c00-aa4d83d660d0" />
 
 ---
 
