@@ -64,9 +64,9 @@ This project focuses on the **Beach BIA** as a case study to explore how complai
 - A small number of service sections account for a large share of total complaints.
 - Complaint volumes exhibit clear temporal variation, suggesting seasonal or event-driven effects.
 - Bike-related and transportation complaints represent a relatively small but distinct subset of total requests.
-<img width="722" height="493" alt="image" src="https://github.com/user-attachments/assets/22b629aa-c922-4c57-b788-0b8ee599bca0" />
-<img width="956" height="464" alt="image" src="https://github.com/user-attachments/assets/84bac603-9e9a-40a4-aa80-43701bd41635" />
-<img width="1115" height="595" alt="image" src="https://github.com/user-attachments/assets/f3ffaec2-e320-4f5f-8c00-aa4d83d660d0" />
+<img src="https://github.com/user-attachments/assets/22b629aa-c922-4c57-b788-0b8ee599bca0" width="650" />
+<img src="https://github.com/user-attachments/assets/84bac603-9e9a-40a4-aa80-43701bd41635" width="650" />
+<img src="https://github.com/user-attachments/assets/f3ffaec2-e320-4f5f-8c00-aa4d83d660d0" width="650" />
 
 ---
 
