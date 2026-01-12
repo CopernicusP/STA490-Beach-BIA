@@ -80,5 +80,3 @@ This project focuses on the **Beach BIA** as a case study to explore how complai
 - Reproducible scripts for data cleaning and analysis
 
 ---
-
-## Repository Structure
