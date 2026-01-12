@@ -17,8 +17,6 @@ files <- list.files(pattern = "^SR.*\\.csv$")
 df <- files %>%
   lapply(read.csv) %>%
   bind_rows()
-
-df
 ```
 
 ```{r}
@@ -27,8 +25,6 @@ df_beach <- df %>%
   filter(First.3.Chars.of.Postal.Code == "M4E" |
          First.3.Chars.of.Postal.Code == "M4L" |
          First.3.Chars.of.Postal.Code == "M4M")
-
-df_beach
 ```
 
 ```{r}
@@ -47,8 +43,6 @@ bike_monthly <- df %>%
     year_month = floor_date(Creation.Date, "month")
   ) %>%
   count(year_month, name = "n")    # total count of every month
-
-bike_monthly
 ```
 
 ```{r}
@@ -80,8 +74,6 @@ bike_monthly_yearly <- df %>%
   count(Year, Month, name = "n") %>%
   arrange(Year, Month)
 
-bike_monthly_yearly
-
 ggplot(bike_monthly_yearly,
        aes(x = Month, y = n, group = Year, colour = as.factor(Year))) +
   geom_line(size = 1) +
@@ -95,7 +87,6 @@ ggplot(bike_monthly_yearly,
     colour = "Year"
   ) +
   theme_minimal(base_size = 13)
-
 ```
 
 
@@ -104,15 +95,12 @@ ggplot(bike_monthly_yearly,
 df %>%
   filter(str_detect(Service.Request.Type, regex("bike|bicy", ignore_case = TRUE))) %>%
   distinct(Service.Request.Type)
-
 ```
 
 ```{r}
 # get all bike-related data
 bike_df <- df %>%
   filter(str_detect(Service.Request.Type, regex("bike|bicy", ignore_case = TRUE)))
-
-bike_df
 ```
 
 ```{r}
@@ -234,4 +222,5 @@ ggplot(bike_monthly_cat,
     plot.title = element_text(size = 16, face = "bold"),
     legend.position = "bottom"
   )
+
 ```
