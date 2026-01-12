@@ -29,8 +29,6 @@ df_beach <- df %>%
   filter(First.3.Chars.of.Postal.Code == "M4E" |
          First.3.Chars.of.Postal.Code == "M4L" |
          First.3.Chars.of.Postal.Code == "M4M")
-
-df_beach
 ```
 
 ```{r}
@@ -39,8 +37,6 @@ df_section <- df_beach %>%
   group_by(Section) %>%
   summarise(count = n()) %>%
   arrange(desc(count))
-
-df_section
 ```
 
 ```{r}
@@ -207,9 +203,6 @@ df_request <- df_beach %>%
   group_by(Service.Request.Type) %>%
   summarise(count = n()) %>%
   arrange(desc(count))
-
-df_request
-
 ```
 
 ```{r}
@@ -266,3 +259,4 @@ df_request %>%
   head(20) %>% 
   knitr::kable()
 ```
+
