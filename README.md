@@ -86,3 +86,19 @@ All analysis in this project is based on the processed dataset generated from th
 - Reproducible scripts for data cleaning and analysis
 
 ---
+
+## Contributions
+
+This project was completed as a group effort, with tasks divided across different components of the analysis.
+
+My contributions focused on the **complaint count analysis** and the **bike-related service request analysis**, including both data processing and interpretation.
+
+Specifically, I was responsible for:
+- Computing and analyzing **311 complaint counts**, including aggregations by time and major service categories to examine overall complaint patterns.
+- Leading the **bike-related analysis** end-to-end, which included:
+  - Identifying and filtering bike-related service requests from the full dataset
+  - Conducting exploratory data analysis (EDA) on bike complaints
+  - Producing visualizations to examine trends and relative prevalence
+  - Interpreting bike-related findings in the context of overall 311 service demand
+
+These components provide key quantitative insights into both general complaint patterns and bike-specific service issues within the Beach BIA area.
