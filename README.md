@@ -33,7 +33,7 @@ This project focuses on the **Beach BIA** as a case study to explore how complai
 > Only relevant records within the Beach BIA boundary were retained.
 
 The raw Toronto 311 service request data are not included in this repository due to file size limitations.
-They can be downloaded from the Toronto Open Data Portal: [https://open.toronto.ca/dataset/311-service-requests/](https://open.toronto.ca/dataset/311-service-requests-customer-initiated/)
+They can be downloaded from the Toronto Open Data Portal: [https://open.toronto.ca/dataset/311-service-requests/](https://open.toronto.ca/dataset/311-service-requests-customer-initiated/).
 All analysis in this project is based on the processed dataset generated from the raw data.
 
 ---
