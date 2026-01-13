@@ -78,12 +78,8 @@ All analysis in this project is based on the processed dataset generated from th
 
 ## Tools & Technologies
 
-- **R**
-  - `tidyverse` (data manipulation & visualization)
-  - `lubridate` (date handling)
-  - `sf` (spatial filtering, if applicable)
+- **R** for all coding
 - **ggplot2** for all visualizations
-- Reproducible scripts for data cleaning and analysis
 
 ---
 
