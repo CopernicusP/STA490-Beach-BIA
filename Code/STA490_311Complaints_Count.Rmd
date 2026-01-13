@@ -1,0 +1,258 @@
+---
+title: "490-tut"
+output: html_document
+date: "2025-10-6"
+---
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(scales)
+library(stringr)
+```
+
+```{r}
+# get data for one year 2024
+# df <- read.csv("SR2024.csv")
+
+# get all data of whole 2022-2025
+files <- list.files(pattern = "^SR.*\\.csv$")
+df <- files %>%
+  lapply(read.csv) %>%
+  bind_rows()
+```
+
+```{r}
+# filter beach bia area
+df_beach <- df %>%
+  filter(First.3.Chars.of.Postal.Code == "M4E" |
+         First.3.Chars.of.Postal.Code == "M4L" |
+         First.3.Chars.of.Postal.Code == "M4M")
+```
+
+```{r}
+# group by Section
+df_section <- df_beach %>%
+  group_by(Section) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+```
+
+```{r}
+# Section → Major Category:
+# Waste & Environmental, Animal & Parks, Traffic & Road, Municipal Operations, # Enforcement & Investigation
+df_beach <- df_beach %>%
+  mutate(
+    Major_Category = case_when(
+      # Waste & Environmental
+      Section %in% c("Collections", "Waste Enforcement", "Litter Operations",
+                     "Collections and Litter Operations") 
+      ~ "Waste & Environmental",
+
+      # Animal & Parks
+      Section %in% c("Toronto Animal Services", "Parks Enforcement",
+                     "Forestry & Recreation", "Climate & Forestry", "Parks") 
+      ~ "Animal & Parks",
+
+      # Traffic & Road
+      Section %in% c("Road Operations", "Right of Way (ROW)", "Traffic Ops",
+                     "Traffic Safety", "Traffic Management", "TMC", "Transfer") 
+      ~ "Traffic & Road",
+
+      # Municipal Operations
+      Section %in% c("District Ops", "Operations", 
+                     "Business Operations Management") 
+      ~ "Municipal Operations",
+
+      # Enforcement & Investigation
+      Section %in% c("Investigation Services", "Bylaw Enforcement",
+                     "Business Licensing Enforcement", "Permits & Enforcement") 
+      ~ "Enforcement & Investigation",
+
+      TRUE ~ "Other"
+    )
+  )
+
+# Count Major Category & Proportion
+cat_counts <- df_beach %>%
+  count(Major_Category, name = "count") %>%
+  mutate(
+    prop = count / sum(count),
+    label = percent(prop, accuracy = 0.1)
+  )
+
+# get Pie Chart
+ggplot(cat_counts, aes(x = "", y = prop, fill = Major_Category)) +
+  geom_col(width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    size = 4
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Waste & Environmental" = "blue",
+      "Animal & Parks" = "orange",
+      "Traffic & Road" = "green",
+      "Municipal Operations" = "red",
+      "Enforcement & Investigation" = "purple",
+      "Other" = "brown"
+    )
+  ) +
+  labs(
+    title = "Overall Complaint Distribution by Major Category",
+    x = NULL, y = NULL, fill = "Category"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+  )
+```
+
+```{r}
+# get count for each category
+df_beach %>%
+  count(Major_Category, name = "count") %>%
+  arrange(desc(count))
+
+df_beach %>%
+  count(Major_Category, Section, name = "count") %>%
+  arrange(Major_Category, desc(count))
+
+df_beach %>%
+  count(Major_Category, Service.Request.Type, name = "count") %>%
+  arrange(Major_Category, desc(count))
+```
+
+
+```{r}
+# count for section in each category
+# Waste & Environmental, Animal & Parks, Traffic & Road, Municipal Operations, # Enforcement & Investigation
+target_category <- "Enforcement & Investigation"
+
+type_data <- df_beach %>%
+  filter(Major_Category == target_category) %>%
+  count(Service.Request.Type, name = "count") %>%
+  mutate(
+    prop = count / sum(count),
+    label = percent(prop, accuracy = 0.1)
+  ) %>%
+  filter(prop >= 0.03) %>%
+  arrange(count)
+
+ggplot(type_data, aes(
+  x = count,
+  y = reorder(Service.Request.Type, count)
+)) +
+  geom_col(fill = "steelblue", width = 0.65) +
+  
+# percentage on the right side
+  geom_text(
+    aes(label = label),
+    hjust = -0.1,
+    color = "#3a3a3a",
+    size = 4
+  ) +
+  
+  scale_x_continuous(
+    expand = expansion(mult = c(0, 0.25))
+  ) +
+  
+  labs(
+    title = paste("Service Request Types in Section:", target_category, "(≥3%)"),
+    x = "Count",
+    y = NULL
+  ) +
+  
+  theme_bw(base_size = 13) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 15),
+    axis.text.y = element_text(size = 11),
+    axis.text.x = element_text(size = 10)
+  )
+```
+
+
+```{r}
+# count in Waste & Environmental category
+df_beach %>%
+  count(Section, name = "count") %>%
+  ggplot(aes(x = reorder(Section, count), y = count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  scale_y_continuous(
+    limits = c(0, 30000), 
+    breaks = seq(0, 30000, by = 5000)
+  ) +
+  labs(title = "311 Complaints by Section", x = "Section", y = "Count") +
+  theme_minimal()
+
+```
+
+```{r}
+# subsection in Collections section
+section_name <- "Collections"   # change Section name
+
+df_request <- df_beach %>%
+  filter(Section == section_name) %>%
+  group_by(Service.Request.Type) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+```
+
+```{r}
+# Top 10 Service Request Categories in Collections from 2022-2025
+# categorization
+df_request <- df_request %>%
+  mutate(Request_Category = Service.Request.Type %>%
+           str_extract("[^/:]+$") %>%  
+           str_squish() %>%   
+           str_to_title())
+df_request
+
+# Step1: merge Not Picked Up
+cat_merged <- df_request %>%
+  mutate(Request_Category = ifelse(
+    grepl("Not Picked Up", Request_Category, ignore.case = TRUE),
+    "Not Picked Up", Request_Category)) %>%
+  group_by(Request_Category) %>%
+  summarise(count = sum(count), .groups = "drop") %>%
+  arrange(desc(count)) %>%
+  slice_head(n = 10)
+
+# Step2: geom_bar
+ggplot(cat_merged, aes(x = reorder(Request_Category, -count), y = count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = count), vjust = -0.3, size = 3.5) +
+  labs(
+    title = "Top 10 Service Request Categories (Merged)",
+    x = "Request Category",
+    y = "Count"
+  ) +
+  expand_limits(y = max(cat_merged$count) * 1.1) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 60, hjust = 1, size = 10),
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14)
+  )
+
+# from large to small
+cat_count <- df_request %>%
+  count(Service.Request.Type, sort = TRUE)
+```
+```{r}
+# count for subsections in Collections section from 2022-2025
+df_request %>%
+  mutate(Request_Category = ifelse(
+    grepl("Not Picked Up", Request_Category, ignore.case = TRUE),
+    "Not Picked Up", Request_Category)) %>%
+  group_by(Request_Category) %>%
+  summarise(Count = sum(count), .groups = "drop") %>%
+  arrange(desc(Count)) %>%
+  head(20) %>% 
+  knitr::kable()
+```
