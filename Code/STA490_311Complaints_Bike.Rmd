@@ -56,22 +56,6 @@ ggplot(bike_monthly, aes(x = year_month, y = n)) +
 ```
 
 ```{r}
-# get trend for each year
-bike_monthly_yearly <- df %>%
-  filter(str_detect(Service.Request.Type,
-                    regex("bike|bicy", ignore_case = TRUE))) %>%
-  mutate(
-    Creation.Date = parse_date_time(
-      Creation.Date,
-      orders = c("Ymd HMS","Y-m-d HMS","Y-m-d HM","Y-m-d",
-                 "mdY HMS","mdY HM","mdY")
-    ),
-    Year  = year(Creation.Date),
-    Month = month(Creation.Date)
-  ) %>%
-  count(Year, Month, name = "n") %>%
-  arrange(Year, Month)
-
 ggplot(bike_monthly_yearly,
        aes(x = Month, y = n, group = Year, colour = as.factor(Year))) +
   geom_line(size = 1) +
