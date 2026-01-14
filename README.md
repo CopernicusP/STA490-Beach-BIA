@@ -43,10 +43,10 @@ Then commit the resulting formatting-only changes as a separate commit (easy to 
 
 ## Key files (what each notebook does)
 
-- **01_data_eda.Rmd**: loads raw iNaturalist + spatial layers, constructs the AOI (Beach BIA ∪ Woodbine Beach, buffered), filters points, produces basic summary stats, and renders a leaflet map.
-- **02_eda_part2.Rmd**: extended EDA; uses cached AOI-filtered layers when available, generates top tables (species/observers), monthly trend plot, and a leaflet layer map.
-- **BIAmaps.Rmd**: an alternative mapping notebook focused on visualizing polygons + points (BIA/park/trees/iNaturalist).
-- **Beach_BIA_Biodiversity_CONSOLIDATED.Rmd**: consolidated end-to-end notebook that reproduces the key outputs and additional analyses (neighbourhood richness, water proximity, top species layers, etc.).
+- **01_data_eda.Rmd**— Author: Peter: loads raw iNaturalist + spatial layers, constructs the AOI (Beach BIA ∪ Woodbine Beach, buffered), filters points, produces basic summary stats, and renders a leaflet map.
+- **02_eda_part2.Rmd**— Author: Peter: extended EDA; uses cached AOI-filtered layers when available, generates top tables (species/observers), monthly trend plot, and a leaflet layer map.
+- **BIAmaps.Rmd**— Author: Peter: an alternative mapping notebook focused on visualizing polygons + points (BIA/park/trees/iNaturalist).
+- **Beach_BIA_Biodiversity_CONSOLIDATED.Rmd**— Original author: Derek; included here for comparison; minor edits (if any): Peter: consolidated end-to-end notebook that reproduces the key outputs and additional analyses (neighbourhood richness, water proximity, top species layers, etc.).
 
 ## Contribution notes (for check-in)
 
