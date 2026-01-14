@@ -13,12 +13,33 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = FALSE)
 ```
 
+```{r file-overview, include=FALSE}
+# Purpose: Build the Beach BIA biodiversity EDA pipeline (AOI definition, filtering, basic stats, and map).
+# Inputs : iNaturalist CSV (observations-624727.csv) + Toronto open data layers (BIA, Green Spaces, Neighbourhoods, Trees, Water, WoodbineBeach).
+# Outputs: outputs/biodiversity_summary.csv (plus figures/maps in the knitted HTML).
+# Notes  : AOI = (Beach BIA ∪ Woodbine Beach) buffered by 30m; CRS standardized to EPSG:4326; buffering done in EPSG:32617.
+# Author : Peter
+```
+
+
 #1. Load Packages & Paths
 ```{r}
 suppressPackageStartupMessages({
-  library(sf); library(dplyr); library(readr); library(stringr)
-  library(tibble); library(janitor); library(glue); library(leaflet); library(purrr)
+  library(sf)
+  library(dplyr)
+  library(readr)
+  library(stringr)
+  library(tibble)
+  library(janitor)
+  library(glue)
+  library(leaflet)
+  library(purrr)
 })
+
+# --- Project paths ---
+# Assumes working directory is the project root (or a folder that contains the data subfolders).
+# Outputs are written to <DATA_DIR>/outputs.
+
 
 DATA_DIR <- getwd()
 OUT_DIR  <- file.path(DATA_DIR, "outputs")
@@ -27,9 +48,14 @@ dir.create(OUT_DIR, showWarnings = FALSE, recursive = TRUE)
 message(glue("Data dir: {DATA_DIR}"))
 message(glue("Outputs:  {normalizePath(OUT_DIR)}"))
 
-# --- robust resolvers ---
+# --- Robust file resolvers ---
+# We search for expected datasets by filename pattern so this notebook can run even
+# if files are nested inside subfolders (as long as names are consistent).
 
-# prefer .geojson; else choose .shp that has .shx & .dbf
+# Prefer .geojson when available; otherwise choose a complete .shp with required sidecars (.shx/.dbf).
+# find_vector(): locate a spatial layer by filename pattern.
+# Prefers GeoJSON when available; otherwise selects a complete Shapefile (requires .shp + .shx + .dbf).
+# Returns a single file path to be passed into sf::st_read().
 find_vector <- function(base_pat, prefer_geojson = TRUE) {
   # 1) geojson first
   if (prefer_geojson) {
@@ -58,6 +84,8 @@ find_vector <- function(base_pat, prefer_geojson = TRUE) {
 }
 
 # sf reader -> EPSG:4326
+# safe_read_sf(): wrapper around sf::st_read() that normalizes CRS to EPSG:4326 (WGS84) when possible.
+# This helps ensure all layers align for filtering and mapping.
 safe_read_sf <- function(f){
   x <- suppressMessages(sf::st_read(f, quiet = TRUE))
   if (!is.na(sf::st_crs(x)) && st_crs(x)$epsg != 4326) x <- st_transform(x, 4326)
