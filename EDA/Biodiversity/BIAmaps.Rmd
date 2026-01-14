@@ -9,6 +9,15 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r file-overview, include=FALSE}
+# Purpose: Visualize Beach BIA / Woodbine Beach polygons with iNaturalist observations and Toronto tree points (interactive leaflet maps).
+# Inputs : BIA shapefile, WoodbineBeach shapefile, TOPO_TREE_WGS84, and iNaturalist CSV (paths based on a /data folder layout).
+# Outputs: Interactive maps in the knitted HTML.
+# Notes  : Assumes a /code vs /data directory structure; update `data.dir` if your local layout differs.
+# Author : Derek Li (comments/formatting added by Peter)
+```
+
+
 ## R Markdown
 
 ```{r}
@@ -18,9 +27,13 @@ library(dplyr)
 ```
 
 ```{r}
+# NOTE: This notebook assumes a /code vs /data folder layout.
+# If your working directory differs, update `data.dir` accordingly.
+
 data.dir <- gsub('/code', '/data', getwd())
 
-# Reading in all data
+# --- Read input datasets ---
+# BIA polygons, Woodbine Beach polygon, tree points, and iNaturalist observations.
 BIA_data <- st_read(paste0(data.dir, "/data/BIAshapes/Business Improvement Areas Data - 4326.shp"))
 
 beach_park <- st_read(paste0(data.dir, "/data/beach_shapes/WoodbineBeach.shp"))
@@ -32,7 +45,8 @@ inaturalist_df <- read.csv(paste0(data.dir, "/data/inaturalist/observations.csv"
 
 
 ```{r}
-# Getting rid of all other BIA shapes
+# --- Define area of interest (AOI) ---
+# Keep only the 'The Beach' BIA polygon, then convert iNaturalist points to sf for mapping.
 beach_bia <- BIA_data %>% filter(AREA_NA8 == "The Beach")
 
 # Converting data from iNaturalist into sf
@@ -86,7 +100,9 @@ leaflet() %>% addProviderTiles("CartoDB.Positron") %>%
 
 
 ```{r}
-# Only interested in iNaturalist observations within areas of interested
+# --- Spatial filtering ---
+# Keep only iNaturalist observations and trees that fall within the union of
+# (Beach BIA polygon) ∪ (Woodbine Beach/Park polygon).
 polys <- bind_rows(beach_bia, beach_park)
 obs_within <- st_filter(obs_sf, polys, .predicate = st_within)
 
