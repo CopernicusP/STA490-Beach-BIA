@@ -13,17 +13,34 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = TRUE, warning = FALSE)
 ```
 
+```{r file-overview, include=FALSE}
+# Purpose: Additional EDA (top species/observers, temporal pattern, and interactive map) using cached AOI-filtered layers when available.
+# Inputs : outputs/*.geojson caches OR raw datasets (same patterns as 01_data_eda.Rmd).
+# Outputs: outputs/top_species.csv, outputs/top_observers.csv, outputs/bio_summary_final.csv (and maps in the knitted HTML).
+# Notes  : Uses cached GeoJSON in outputs/ when present to speed up reruns; CRS standardized to EPSG:4326.
+# Author : Beach BIA Biodiversity Team (edited/commented by Peter)
+```
+
+
 #1. Load Packages & Paths
 ```{r}
 suppressPackageStartupMessages({
-library(sf); library(dplyr); library(readr); library(stringr)
-library(janitor); library(glue); library(leaflet); library(purrr)
-library(ggplot2); library(lubridate)
+  library(sf)
+  library(dplyr)
+  library(readr)
+  library(stringr)
+  library(janitor)
+  library(glue)
+  library(leaflet)
+  library(purrr)
+  library(ggplot2)
+  library(lubridate)
 })
 
 DATA_DIR <- getwd()
 OUT_DIR  <- file.path(DATA_DIR, "outputs")
 dir.create(OUT_DIR, showWarnings = FALSE, recursive = TRUE)
+# msg(): lightweight wrapper for glue::glue() + message() to keep logging consistent.
 
 msg <- function(...) message(glue::glue(...))
 msg("Data dir: {DATA_DIR}")
@@ -33,6 +50,10 @@ msg("Outputs : {normalizePath(OUT_DIR)}")
 
 #2. Load prepared GeoJSONs or rebuild
 ```{r}
+# --- Cache strategy ---
+# If outputs/*.geojson exist from a previous run, we load them to avoid re-reading
+# all raw datasets. Otherwise we rebuild AOI + filtered layers and write caches.
+
 # --- try to load prepared files ---
 
 inat_gj  <- file.path(OUT_DIR, "inat_beach.geojson")
@@ -40,6 +61,8 @@ tree_gj  <- file.path(OUT_DIR, "trees_beach.geojson")
 aoi_gj   <- file.path(OUT_DIR, "Beach_BIA_area.geojson")
 
 use_cached <- file.exists(inat_gj) && file.exists(tree_gj) && file.exists(aoi_gj)
+# safe_read_sf(): wrapper around sf::st_read() that normalizes CRS to EPSG:4326 (WGS84) when possible.
+# This helps ensure all layers align for filtering and mapping.
 
 safe_read_sf <- function(f){
   x <- suppressMessages(sf::st_read(f, quiet = TRUE))
@@ -56,6 +79,9 @@ if (use_cached) {
   msg("ℹ No cached GeoJSON found. Rebuilding from raw datasets…")
 
   # --- resolvers (prefer .geojson; else complete .shp) ---
+# find_vector(): locate a spatial layer by filename pattern.
+# Prefers GeoJSON when available; otherwise selects a complete Shapefile (requires .shp + .shx + .dbf).
+# Returns a single file path to be passed into sf::st_read().
   find_vector <- function(base_pat, prefer_geojson = TRUE) {
     if (prefer_geojson) {
       gj <- list.files(DATA_DIR, pattern = paste0(base_pat, ".*\\.geojson$"),
