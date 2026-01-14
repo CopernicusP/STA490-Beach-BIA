@@ -50,6 +50,11 @@ Then commit the resulting formatting-only changes as a separate commit (easy to 
 
 ## Contribution notes (for check-in)
 
-- **Peter**: repository organization + documentation/formatting of biodiversity EDA code; ensured workflows and outputs are clearly described in README.
-- **Derek**: developed the final adopted analysis pipeline for presentation outputs (graphs/maps) and is leading the presentation component.
+### Authorship (Biodiversity EDA notebooks)
+- Peter: primary author of `EDA/Biodiversity/01_data_eda.Rmd`, `EDA/Biodiversity/02_eda_part2.Rmd`, and `EDA/Biodiversity/Beach_BIA_Biodiversity_CONSOLIDATED.Rmd`.
+- Derek: initial author of `EDA/Biodiversity/BIAmaps.Rmd` (Peter included it here for reference and aligned it with the branch workflow/structure).
+
+### Repo / documentation work
+- Peter: organized the Peter-BIa-EDA branch for the GitHub check-in; added/standardized notebook header comments and section comments; updated README ("How to run", "Key files", and workflow notes).
+- Derek: leading the presentation component and producing the final graphs/maps for the class presentation.
 
