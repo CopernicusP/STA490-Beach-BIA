@@ -1,8 +1,8 @@
 # Toronto 311 Complaints Analysis (Beach BIA Case Study)
 
-This project analyzes Toronto 311 service request data with a focus on the **Beach BIA area**, aiming to understand complaint patterns, temporal trends, and category-level distributions of municipal service requests.
+This project analyzes Toronto 311 service request data with a focus on the **Beach BIA area**, aiming to understand complaint patterns, temporal trends, and distributions of municipal service requests.
 
-The analysis combines exploratory data analysis (EDA), geospatial filtering, and time-series visualization to provide insights into how different types of city services are requested over time and across categories.
+The analysis combines exploratory data analysis (EDA) and time-series visualization to provide insights into how different types of city services are requested over time and across categories.
 
 ---
 
@@ -53,12 +53,10 @@ All analysis in this project is based on the processed dataset generated from th
 - Distribution of complaints across major categories
 - Section-level breakdown within dominant categories
 - Temporal trends in complaint volume
-- Comparison of relative frequencies across services
 
 ### 3. Visualization
 - Time-series plots of complaint counts
-- Bar charts for category and section distributions
-- Clear labeling and consistent color schemes for interpretability
+- Pie chart and Bar charts for category and section distributions
 
 ---
 
@@ -91,7 +89,7 @@ My contributions focused on the **complaint count analysis** and the **bike-rela
 
 Specifically, I was responsible for:
 - Computing and analyzing **311 complaint counts**, including aggregations by time and major service categories to examine overall complaint patterns.
-- Leading the **bike-related analysis** end-to-end, which included:
+- Analyzing **bike-related complaints** , which included:
   - Identifying and filtering bike-related service requests from the full dataset
   - Conducting exploratory data analysis (EDA) on bike complaints
   - Producing visualizations to examine trends and relative prevalence
