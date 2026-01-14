@@ -76,8 +76,7 @@ All analysis in this project is based on the processed dataset generated from th
 
 ## Tools & Technologies
 
-- **R** for all coding
-- **ggplot2** for all visualizations
+- **R** for all coding, including packages: dplyr, lubridate, ggplot2, scales, stringr.
 
 ---
 
