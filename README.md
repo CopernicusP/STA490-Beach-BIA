@@ -42,7 +42,7 @@ We keep the top-level structure consistent so everyone can find things quickly:
 Please keep this section updated so it’s clear who did what.
 
 - **Peter (Yudian Pan):** biodiversity EDA + consolidated notebook work; repo cleanup/documentation for check-in; branch organization and readability improvements.
-- **Derek Li:** biodiversity mapping + presentation artifacts; leading final graphs/maps + High Park comparison / presentation selection.
+- **Derek Li:** biodiversity EDA and mapping (all in bio_eda) + presentation figures + leading final graphs/maps + High Park comparison / presentation selection.
 - **Other members/groups:** (add names + 1–2 bullet responsibilities here)
 
 ## Notes

@@ -1,0 +1,280 @@
+---
+title: "Beach BIA Biodiversity EDA"
+author: "Derek Li"
+date: "2025-11-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The Beach BIA
+
+```{r}
+library(sf)
+library(leaflet)
+library(dplyr)
+library(spatstat)
+library(terra)
+library(htmlwidgets)
+```
+
+
+### Preliminary Mapping
+
+```{r}
+# Loading in datasets from Toronto Open Data
+nbhd  <- st_read("../../../Data/neighbourhoods/Neighbourhoods - 4326.shp")
+
+trees <- st_read("../../../Data/trees/TOPO_TREE_WGS84.shp")
+
+water <- st_read("../../../Data/waterbodies/TOPO_Waterbody_WGS84.shp")
+
+green <- st_read("../../../Data/greenspace/Green Spaces - 4326.shp")
+
+bia   <- st_read("../../../Data/bia/Business Improvement Areas Data - 4326.shp")
+
+# Loading in iNaturalist data
+inaturalist_df <- read.csv("../../../Data/inaturalist/observations.csv")
+```
+
+
+```{r}
+# Extracting Beach BIA polygon
+the_beaches <- nbhd %>% filter(X_id1 == 93)
+
+# Mapping the Beach BIA
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data=the_beaches)
+```
+
+
+```{r}
+# Convert iNaturalist data into a shapefile
+inaturalist_df <- inaturalist_df %>%
+  mutate(
+    lon = as.numeric(longitude),
+    lat = as.numeric(latitude)
+  ) %>%
+  filter(!is.na(longitude),
+         !is.na(latitude),
+         lon >= -180,
+         lon <= 180,
+         lat >= -90,
+         lat <= 90)
+
+obs_sf <- st_as_sf(inaturalist_df, coords = c("longitude", "latitude"), 
+                   crs = 4326)
+
+# Extract only observations within the BIA
+obs_within <- st_filter(obs_sf, the_beaches, .predicate = st_within)
+```
+
+
+```{r}
+# Categorizing iNaturalist observations into several main classes
+obs_within <- obs_within %>% mutate(category = case_when(
+  iconic_taxon_name == "Plantae" ~ "Plants",
+  iconic_taxon_name == "Aves" ~ "Birds",
+  iconic_taxon_name == "Insecta" ~ "Insects",
+  iconic_taxon_name == "Mammalia" ~ "Mammals",
+  iconic_taxon_name == "Reptilia" ~ "Reptiles",
+  iconic_taxon_name == "Arachnida" ~ "Spiders",
+  TRUE ~ "Other"))
+
+obs_within$category <- as.factor(obs_within$category)
+groups <- levels(obs_within$category)
+```
+
+
+```{r}
+# Now mapping all observations according to their category
+species_cat.pal <- colorFactor("viridis", domain = groups)
+
+map1 <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = the_beaches)
+
+for (g in groups) {
+  map1 <- map1 %>% addCircles(data    = subset(obs_within, 
+                                               category == g),
+                              group   = g,
+                              label   = g,
+                              color   = ~species_cat.pal(g),
+                              radius  = 1,
+                              opacity = 1,
+                              weight  = 4)
+}
+
+map1 <- map1 %>% 
+  addLayersControl(overlayGroups = groups,
+                   options       = layersControlOptions(collapsed = FALSE)
+                   ) %>%
+  addLegend("bottomleft", 
+            pal     = species_cat.pal,
+            values  = obs_within$category,
+            opacity = 1)
+
+map1
+```
+
+
+```{r}
+# Mapping observations with filter by year options
+# Convert observation dates into Date format
+obs_within <- obs_within %>% 
+  mutate(year_obs = format(as.Date(observed_on), "%Y"))
+
+obs_within$year_obs <- as.factor(obs_within$year_obs)
+
+years <- levels(obs_within$year_obs)
+
+year.pal <- colorFactor("magma", domain = years)
+
+map2 <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data  = the_beaches,
+              color = "lightblue")
+
+for (i in years) {
+  map2 <- map2 %>% addCircles(data    = subset(obs_within, 
+                                           year_obs == i),
+                              group   = i,
+                              color   = ~year.pal(year_obs),
+                              opacity = 1,
+                              radius  = 1,
+                              weight  = 4)
+}
+
+map2 <- map2 %>% addLegend("bottomright", 
+                           pal     = year.pal,
+                           values  = obs_within$year_obs,
+                           opacity = 1
+                           ) %>% 
+  addLayersControl(position      = "topright",
+                   overlayGroups = years,
+                   options       = layersControlOptions(collapsed = FALSE))
+
+map2
+```
+
+
+
+```{r}
+# Extracting all trees, waterbodies, green spaces within the BIA
+trees_within <- st_filter(trees, the_beaches, .predicate = st_within)
+
+water_within <- st_filter(water, the_beaches, .predicate = st_within)
+
+green_within <- st_filter(green, the_beaches, .predicate = st_within)
+
+# Creating buffers around water bodies
+water_proj        <- st_transform(water_within, 32617)
+water_buffer_proj <- st_buffer(water_proj, dist = 20)
+water_buffer      <- st_transform(water_buffer_proj, crs = 4326)
+```
+
+
+```{r}
+# Mapping the BIA, waterbodies, green spaces, trees, and iNaturalist observations with layer controls.
+map3 <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data    = the_beaches,
+              color   = "lightgray",
+              opacity = 0.8
+              ) %>% 
+  addPolygons(data    = water_buffer,
+              color   = "blue",
+              opacity = 0.9,
+              group   = "Waterbodies"
+              ) %>% 
+  addPolygons(data    = green_within,
+              color   = "lightgreen",
+              opacity = 0.9,
+              group   = "Green Spaces"
+              ) %>% 
+  addCircles(data     = obs_within,
+             opacity  = 1,
+             color    = "orange",
+             radius   = 1,
+             weight   = 2,
+             group    = "iNaturalist"
+             ) %>% 
+  addCircles(data     = trees_within,
+             opacity  = 1,
+             color    = "darkgreen",
+             radius   = 1,
+             weight   = 2,
+             group    = "Trees"
+             ) %>% 
+  addLegend("bottomright",
+            colors = c("orange",
+                       "darkgreen",
+                       "blue",
+                       "lightgreen"),
+            labels = c("Biodiversity (iNaturalist)",
+                       "Trees",
+                       "Waterbodies",
+                       "Green Spaces")
+            ) %>% 
+  addLayersControl(position      = "topright",
+                   overlayGroups = c("iNaturalist",
+                                     "Trees",
+                                     "Waterbodies",
+                                     "Green Spaces"),
+                   options       = layersControlOptions(collapsed = FALSE))
+
+map3
+```
+
+
+### BIA commercial strip tree density analysis
+
+```{r}
+# Extracting and projecting trees within the BIA commercial strip
+bia_strip <- bia %>% filter(X_id1 == 10)
+
+trees_in_strip <- st_filter(trees, bia_strip, .predicate = st_within)
+
+strip_proj <- st_transform(bia_strip, 32617)
+tree_strip_proj <- st_transform(trees_in_strip, 32617)
+```
+
+
+```{r}
+# Method 1: simple count and average within polygon
+strip_count <- nrow(trees_in_strip)
+strip_density <- strip_count / as.numeric(st_area(strip_proj) / 1000000)
+```
+
+
+```{r}
+# Method 2: Kernel density estimator
+win    <- as.owin(strip_proj)
+coords <- st_coordinates(tree_strip_proj)
+pp     <- ppp(coords[,1], coords[,2], window = win)
+
+density_kde <- density.ppp(pp, sigma = bw.diggle(pp), edge = TRUE)
+
+r <- rast(density_kde)
+
+poly_sp  <- vect(strip_proj)
+r_masked <- mask(r, poly_sp)
+
+global(r_masked, "mean", na.rm = TRUE)
+global(r_masked, "sum", na.rm = TRUE)
+
+plot(r_masked)
+plot(strip_proj$geometry, add = TRUE, border = "red", lwd = 2)
+```
+
+
+## High Park Comparison
+
+```{r}
+# Extracting high park neighbourhood polygon ()
+high_park_nb    <- nbhd %>% filter(AREA_SH5 == "087")
+high_park_green <- st_filter
+
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = high_park_nb)
+```
+
