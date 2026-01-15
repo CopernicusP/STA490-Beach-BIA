@@ -25,16 +25,19 @@ WATER_BUF_M  <- 20              # Near-water buffer (meters)
 START_DATE   <- as.Date("2020-01-01")
 
 # ---------------- Paths & helpers ----------------
-OUT_DIR <- file.path(getwd(), "outputs")
-dir.create(OUT_DIR, showWarnings = FALSE, recursive = TRUE)
+FIG_DIR <- file.path(getwd(), "Figures")
+RES_DIR <- file.path(getwd(), "Results")
+dir.create(FIG_DIR, showWarnings = FALSE, recursive = TRUE)
+dir.create(RES_DIR, showWarnings = FALSE, recursive = TRUE)
 
 msg <- function(...) message(glue::glue(...))
 
-# Search across multiple roots
+# Search across multiple roots (prefer main repo layout first)
 DATA_DIRS <- unique(c(
-  getwd(),
-  file.path(getwd(), "Dataset"),
+  file.path(getwd(), "Data"),
+  file.path(getwd(), "Dataset"),  # backward compatibility
   file.path(getwd(), "data"),
+  getwd(),
   "/mnt/data"
 ))
 
@@ -110,14 +113,14 @@ msg("Resolved paths:\n{paste(capture.output(str(resolved)), collapse = '\n')}")
 # 2) Build AOI (BIA ∪ Woodbine ∪ Neighbourhood 'The Beaches') + cache layers
 ```{r}
 # Cache targets for faster re-runs
-inat_gj <- file.path(OUT_DIR,"inat_aoi.geojson")
-tree_gj <- file.path(OUT_DIR,"trees_aoi.geojson")
-aoi_gj  <- file.path(OUT_DIR,"aoi_union_buffer.geojson")
+inat_gj <- file.path(RES_DIR,"inat_aoi.geojson")
+tree_gj <- file.path(RES_DIR,"trees_aoi.geojson")
+aoi_gj  <- file.path(RES_DIR,"aoi_union_buffer.geojson")
 
 use_cached <- file.exists(inat_gj) && file.exists(tree_gj) && file.exists(aoi_gj)
 
 if (use_cached){
-  msg("✅ Using cached GeoJSON in outputs/")
+  msg("✅ Using cached GeoJSON in Results/")
   inat_aoi  <- safe_read_sf(inat_gj)
   trees_aoi <- safe_read_sf(tree_gj)
   aoi_buf   <- safe_read_sf(aoi_gj)
@@ -278,12 +281,12 @@ species_per_ha = round(species_n / sum(area_ha), 3),
 aoi_buffer_m   = AOI_BUFFER_M
 )
 summary_tbl
-write_csv(summary_tbl, file.path(OUT_DIR, "bio_summary_final.csv"))
+write_csv(summary_tbl, file.path(FIG_DIR, "bio_summary_final.csv"))
 
 top_species_tbl <- inat_clean |> st_drop_geometry() |> count(scientific_name, sort=TRUE) |> slice_head(n=10)
 top_observers_tbl <- inat_clean |> st_drop_geometry() |> count(user_login, sort=TRUE) |> slice_head(n=10)
-write_csv(top_species_tbl,  file.path(OUT_DIR,"top_species.csv"))
-write_csv(top_observers_tbl,file.path(OUT_DIR,"top_observers.csv"))
+write_csv(top_species_tbl, file.path(FIG_DIR, "top_species.csv"))
+write_csv(top_observers_tbl, file.path(FIG_DIR, "top_observers.csv"))
 
 if ("observed_on" %in% names(inat_clean)) {
 monthly <- inat_clean |> st_drop_geometry() |>
@@ -296,7 +299,7 @@ theme_minimal() + theme(axis.text.x=element_text(angle=45, hjust=1))
 }
 
 cat_summary <- inat_clean |> st_drop_geometry() |> count(category, name="observations") |> arrange(desc(observations))
-write_csv(cat_summary, file.path(OUT_DIR,"category_summary.csv"))
+write_csv(cat_summary, file.path(FIG_DIR, "category_summary.csv"))
 ```
 
 # 5) Multi-area summary (BIA vs Woodbine vs Neighbourhood vs AOI)
@@ -328,7 +331,7 @@ areas_list[["The Beaches (Neighbourhood)"]] <- neigh_beaches
 
 summary_by_area <- bind_rows(purrr::imap(areas_list, ~ summarise_area(.y, .x)))
 summary_by_area
-write_csv(summary_by_area, file.path(OUT_DIR,"bio_summary_by_area.csv"))
+write_csv(summary_by_area, file.path(FIG_DIR, "bio_summary_by_area.csv"))
 ```
 
 # 6) Neighbourhood richness choropleth (within AOI)
@@ -353,7 +356,7 @@ st_drop_geometry() %>% select(neigh = .data[[neigh_name_col]], area_ha)
 
 neigh_summary <- obs_by_neigh %>% left_join(sp_by_neigh, by="neigh") %>% left_join(neigh_area, by="neigh") %>%
 mutate(species_per_ha = round(unique_species/area_ha, 3)) %>% arrange(desc(unique_species))
-write_csv(neigh_summary, file.path(OUT_DIR, "neighbourhood_biodiversity_summary.csv"))
+write_csv(neigh_summary, file.path(FIG_DIR, "neighbourhood_biodiversity_summary.csv"))
 neigh_summary
 
 neigh_poly_metric <- neigh_clip %>% left_join(neigh_summary, by = setNames("neigh", neigh_name_col)) %>%
@@ -388,7 +391,7 @@ pivot_wider(names_from = near_water, values_from = n, values_fill = 0, names_pre
 transmute(category, near = `is_TRUE`, away = `is_FALSE`, share_near = round(near/(near+away), 3))
 
 overall_share_near <- round(sum(near_flag$near) / sum(near_flag$near + near_flag$away), 3)
-write_csv(near_flag, file.path(OUT_DIR, "near_water_by_category.csv"))
+write_csv(near_flag, file.path(FIG_DIR, "near_water_by_category.csv"))
 tibble(overall_share_near)
 near_flag
 ```
@@ -413,14 +416,14 @@ colors=c("#2ca25f","#3182bd","#fd8d3c","#756bb1","#41ab5d","#636363","#969696","
 labels=c("Plants","Birds","Insects","Mammals","Reptiles","Spiders","Other","Trees"),
 title="Layers")
 m
-saveWidget(m, file.path(OUT_DIR,"map_categories_and_trees.html"), selfcontained=TRUE)
+saveWidget(m, file.path(RES_DIR,"map_categories_and_trees.html"), selfcontained=TRUE)
 
 if (requireNamespace("leaflet.extras", quietly = TRUE)) {
 m_heat <- leaflet(options = leafletOptions(minZoom=10)) %>%
 addProviderTiles("CartoDB.Positron") %>%
 addPolygons(data=aoi_buf, label="AOI (union) buffer", color="#444", weight=2, fillOpacity=0.05) %>%
 leaflet.extras::addHeatmap(data = inat_clean, blur = 15, max = 0.6, radius = 10)
-saveWidget(m_heat, file.path(OUT_DIR,"map_heat.html"), selfcontained=TRUE)
+saveWidget(m_heat, file.path(RES_DIR,"map_heat.html"), selfcontained=TRUE)
 }
 ```
 
@@ -458,7 +461,7 @@ addLegend("bottomright", pal = pal_sp, values = ~scientific_name,
 data = st_drop_geometry(inat_top), title = "Top 10 species")
 
 m_top
-saveWidget(m_top, file.path(OUT_DIR,"map_top10_species.html"), selfcontained=TRUE)
+saveWidget(m_top, file.path(RES_DIR,"map_top10_species.html"), selfcontained=TRUE)
 ```
 
 
@@ -486,7 +489,7 @@ m_year <- m_year %>% addLegend("bottomright", pal = pal_year, values = years, op
 addLayersControl(position = "topright", overlayGroups = years, options = layersControlOptions(collapsed = FALSE))
 
 m_year
-saveWidget(m_year, file.path(OUT_DIR,"map_by_year.html"), selfcontained=TRUE)
+saveWidget(m_year, file.path(RES_DIR,"map_by_year.html"), selfcontained=TRUE)
 }
 ```
 
@@ -508,7 +511,7 @@ pts %>% st_drop_geometry() %>% count(scientific_name, sort=TRUE) %>% slice_head(
 
 top_by_area <- purrr::imap(areas_for_table, ~ topN_area(.x, N=5) %>% mutate(area = .y)) %>%
 bind_rows() %>% relocate(area)
-write_csv(top_by_area, file.path(OUT_DIR, "top5_species_by_area.csv"))
+write_csv(top_by_area, file.path(FIG_DIR, "top5_species_by_area.csv"))
 top_by_area
 ```
 
@@ -528,7 +531,7 @@ item = c(
 "Top-10 species layered map",
 "Per-year layered map",
 "Top-5 species by area tables",
-"All outputs saved in /outputs"
+"CSVs saved in /Figures; maps + GeoJSON saved in /Results"
 ),
 done = TRUE
 )
@@ -552,5 +555,5 @@ dict <- tibble::tribble(
 "top5_species_by_area.csv","scientific_name","species name",
 "top5_species_by_area.csv","n","observation count"
 )
-write_csv(dict, file.path(OUT_DIR, "outputs_data_dictionary.csv"))
+write_csv(dict, file.path(FIG_DIR, "outputs_data_dictionary.csv"))
 ```
