@@ -88,9 +88,9 @@ All analysis in this project is based on the processed dataset generated from th
 
 This project was completed as a group effort, with tasks divided across different components of the analysis.
 
-### Jingyi's contributions focused on the **complaint count analysis** and the **bike-related service request analysis**, including both data processing and interpretation.
+### Jinyi's contributions focused on the **complaint count analysis** and the **bike-related service request analysis**, including both data processing and interpretation.
 
-Specifically, Jingyi was responsible for:
+Specifically, Jinyi was responsible for:
 - Computing and analyzing **311 complaint counts**, including aggregations by time and major service categories to examine overall complaint patterns.
 - Analyzing **bike-related complaints** , which included:
   - Identifying and filtering bike-related service requests from the full dataset
