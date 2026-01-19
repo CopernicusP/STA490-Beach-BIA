@@ -41,9 +41,15 @@ We keep the top-level structure consistent so everyone can find things quickly:
 ## Contributions (for check-in)
 Please keep this section updated so it’s clear who did what.
 
+<<<<<<< HEAD
+- **Peter (Yudian Pan):** biodiversity EDA + consolidated notebook work; repo cleanup/documentation for check-in; branch organization and readability improvements.
+- **Derek Li:** biodiversity EDA and mapping (all in bio_eda) + presentation figures + leading final graphs/maps + High Park comparison / presentation selection.
+- **Other members/groups:** (add names + 1–2 bullet responsibilities here)
+=======
 - **Peter (Yudian Pan):** biodiversity EDA + consolidated notebook work; Repo structure cleanup (Code/Data/Figures/Results), documentation + navigation in main README; branch organization and readability improvements.
 - **Derek Li:** biodiversity mapping + presentation artifacts; leading final graphs/maps + High Park comparison / presentation selection.
 - **Jingyi & Gengqi** 311 complaint part. The specific contributions are under the branch.
+>>>>>>> origin/main
 
 ## Notes
 - Don’t duplicate large raw datasets in multiple places—prefer `Data/` as the shared source of truth.
