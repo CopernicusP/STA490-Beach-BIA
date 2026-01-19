@@ -272,9 +272,20 @@ plot(strip_proj$geometry, add = TRUE, border = "red", lwd = 2)
 ```{r}
 # Extracting high park neighbourhood polygon ()
 high_park_nb    <- nbhd %>% filter(AREA_SH5 == "087")
-high_park_green <- st_filter
 
 leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
   addPolygons(data = high_park_nb)
+```
+
+
+```{r}
+# Loading and extracting data
+hp_trees <- st_read("../../../Data/trees_HP/High_Park_Tree.shp")
+
+hp_trees_within <- st_filter(hp_trees, high_park_nb, .predicate = st_within)
+
+high_park_green <- st_filter(green, high_park_nb, .predicate = st_within)
+
+
 ```
 
