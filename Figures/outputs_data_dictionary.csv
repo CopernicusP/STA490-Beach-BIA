@@ -1,0 +1,17 @@
+file,column,meaning
+bio_summary_final.csv,total_obs,iNat obs inside AOI
+bio_summary_final.csv,unique_species,distinct scientific_name
+bio_summary_final.csv,tree_points,tree records inside AOI
+bio_summary_final.csv,area_ha,AOI area (hectares)
+bio_summary_final.csv,species_per_ha,unique_species / area_ha
+bio_summary_final.csv,aoi_buffer_m,AOI buffer used (meters)
+neighbourhood_biodiversity_summary.csv,neigh,neighbourhood name
+neighbourhood_biodiversity_summary.csv,unique_species,species within neighbourhood∩AOI
+neighbourhood_biodiversity_summary.csv,area_ha,neighbourhood area in AOI (ha)
+neighbourhood_biodiversity_summary.csv,species_per_ha,unique_species / area_ha
+near_water_by_category.csv,category,Plants/Birds/Insects/Mammals/Reptiles/Spiders/Other
+near_water_by_category.csv,"near, away",counts within vs. outside WATER_BUF_M
+near_water_by_category.csv,share_near,near / (near+away)
+top5_species_by_area.csv,area,BIA / Woodbine / Neighbourhood / AOI
+top5_species_by_area.csv,scientific_name,species name
+top5_species_by_area.csv,n,observation count

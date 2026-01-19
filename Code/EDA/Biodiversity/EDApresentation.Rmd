@@ -1,0 +1,265 @@
+---
+title: "EDA Presentation"
+author: "Derek Li"
+date: "2025-11-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Introduction and Data
+
+Goal:
+Take a look at the distribution of biodiversity across the BIA and woodbine area. We focused on identifying any temporal orspatial patterns in biodiversity, vegetation, and water features that may contribute to the area’s overall environmental quality and attractiveness to visitors.
+
+Datasets Overview:
+
+1. iNaturalist Dataset:
+  * Description: Records of animal and plant species observed within the BIA boundaries from years 2020 to present.
+  * Key variables:
+    * common_name (string)
+    * iconic_taxon_name (string) - scientific categorical name
+    * latitude, longitude (numeric) - coordinates of obvservation
+    * observed_on (string/date) - date of observation
+  * Purpose: Used to assess biodiversity richness, species distribution, and possible ecological hotspots in the BIA.
+
+2. Tree Point Dataset:
+  * Description: mapping of the physical locations of all trees in the BIA, obtained from Toronto Open Data.
+  * Key variables:
+    * OBJECTID (numeric) - Unique identifier
+    * LATITUDE, LONGITUDE (in geometry, numeric) - coordinates of tree
+  * Purpose: potentially provides insight into canopy coverage, species diversity, and potential cooling or shading effects that can enhance pedestrian comfort and street appeal.
+  
+3. Waterbody/Green Spaces Dataset:
+  * Description: Layer representing water features/green spaces, obtained from Toronto Open Data.
+  * Key variables:
+    * geometry (sf) - boundaries of the waterbodies
+    * AREA_NA9 (green spaces, string) - names of the green spaces
+  * Purpose: Used to examine proximity effects; how wildlife density or biodiversity levels may correlate with nearby natural features.
+  
+All datasets are referenced in a common coordinate reference system (EPSG:4326). All analyses were conducted within the boundaries of the BIA.
+
+
+### Data Processing and Cleaning
+
+
+```{r, include=FALSE}
+library(dplyr)
+library(sf)
+library(leaflet)
+library(ggplot2)
+library(knitr)
+
+data.dir <- gsub('/code', '/data', getwd())
+
+# Neighbourhoods and filtering out only BIA of interest
+nbhd <- st_read(paste0(data.dir,
+                       "/data/neighbourhoods/Neighbourhoods - 4326.shp"))
+the_beaches <- nbhd %>% filter(X_id1 == 93)
+
+# Tree point data
+trees <- st_read(paste0(data.dir, "/data/trees/TOPO_TREE_WGS84.shp"))
+
+# iNaturalist dataset
+inaturalist_df <- read.csv(paste0(data.dir, "/data/inaturalist/observations.csv"))
+
+# Waterbodies
+water <- st_read(paste0(data.dir, "/data/waterbodies/TOPO_Waterbody_WGS84.shp"))
+
+# Green spaces
+green <- st_read(paste0(data.dir, "/data/greenspace/Green Spaces - 4326.shp"))
+```
+
+1. iNaturalist Dataset:
+  * Checked for obvious duplicate observations.
+  * Checked for any observations with NA values in columns of interest.
+  * Made sure variables are consistent across all observations (e.g. format, data type)
+  
+```{r, echo=FALSE}
+inaturalist_df <- inaturalist_df %>%
+  mutate(longitude = as.numeric(longitude),
+         latitude = as.numeric(latitude))
+
+inaturalist_df$iconic_taxon_name <- as.factor(inaturalist_df$iconic_taxon_name)
+
+inaturalist_df$observed_on <- as.Date(inaturalist_df$observed_on)
+```
+
+  * Filtered irrelevant observations outside of the boundaries of the BIA.
+
+```{r, echo=FALSE}
+obs_sf <- st_as_sf(inaturalist_df, coords = c("longitude", "latitude"), 
+                   crs = 4326)
+obs_within <- st_filter(obs_sf, the_beaches, .predicate = st_within)
+```
+
+  * Categorized observations based on iconic_taxon_name.
+
+```{r, echo=FALSE}
+obs_within <- obs_within %>% mutate(category = case_when(
+  iconic_taxon_name == "Plantae" ~ "Plants",
+  iconic_taxon_name == "Aves" ~ "Birds",
+  iconic_taxon_name == "Insecta" ~ "Insects",
+  iconic_taxon_name == "Mammalia" ~ "Mammals",
+  iconic_taxon_name == "Reptilia" ~ "Reptiles",
+  iconic_taxon_name == "Arachnida" ~ "Spiders",
+  iconic_taxon_name == "Fungi" ~ "Fungi",
+  TRUE ~ "Other"))
+
+obs_within$category <- as.factor(obs_within$category)
+```
+
+
+2. Tree Point Dataset
+  * Cropped original data to a subset which encompasses the BIA.
+  * Checked for obvious duplicates and NA values.
+  * Filtered out observations outside of the boundaries of the BIA.
+
+```{r, echo=FALSE}
+trees_within <- st_filter(trees, the_beaches, .predicate = st_within)
+```
+
+3. Waterbodies/Green Spaces Dataset
+  * Checked for obvious duplicates and NA values.
+  * Filtered out observations outside of the boundaries of the BIA.
+
+```{r, echo=FALSE}
+water_within <- st_filter(water, the_beaches, .predicate = st_within)
+green_within <- st_filter(green, the_beaches, .predicate = st_within)
+```
+
+
+### Summaries and Plots
+
+
+Summary/preview of data
+
+
+```{r, echo=FALSE}
+print(paste0("Number of Trees in the BIA: ", nrow(trees_within)))
+
+kable(green_within[c(1, 6, 9)], 
+      col.names = c("Unique ID", 
+                    "Green Space Category", "Name", "geometry (omit)"),
+      caption = "Summary of green spaces within the BIA")
+kable(water_within[c(11, 2)], col.names = c("Unique ID", "Waterbody Category", 
+                                            "geometry (omit)"),
+      caption = "Summary of waterbodies within the BIA")
+kable(head(obs_within[,c("observed_on", "scientific_name", "common_name", 
+                         "iconic_taxon_name")], 10),
+      col.names = c("Date Observed", "Scientific Name", "Common Name", 
+                    "Species Category", "geometry (omit)"),
+      caption = "Preview of iNaturalist data set")
+```
+
+
+Categories of species
+
+
+```{r, echo=FALSE}
+cat_counts <- table(obs_within$category)
+kable(cat_counts, col.names = c("Category", "Number of Observations"))
+
+ggplot(obs_within, aes(x = category)) +
+  geom_bar() + 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1)) +
+  labs(title = "Number of Observations by Category") +
+  ylab("Number of Observations")
+
+m <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data=the_beaches)
+
+groups <- levels(obs_within$category)
+
+species_cat.pal <- colorFactor("viridis", domain = groups)
+
+for (g in groups) {
+  m <- m %>% addCircles(data = subset(obs_within, category == g),
+                        group = g,
+                        label = g,
+                        color = ~species_cat.pal(g),
+                        radius = 1,
+                        opacity = 1,
+                        weight = 4)
+}
+
+m %>% addLayersControl(overlayGroups = groups,
+                       options = layersControlOptions(collapsed = FALSE)
+                       ) %>%
+  addLegend("bottomleft", pal = species_cat.pal,
+            values = obs_within$category,
+            opacity = 1,
+            title = "iNaturalist Observations by Category")
+```
+
+
+iNaturalist Observations by Year
+
+
+```{r, echo=FALSE}
+obs_within <- obs_within %>% 
+  mutate(year_obs = format(as.Date(observed_on), "%Y"))
+obs_within$year_obs <- as.factor(obs_within$year_obs)
+
+year_counts <- table(obs_within$year_obs)
+kable(year_counts, col.names = c("Year", "Number of Observations"))
+
+ggplot(obs_within, aes(x=year_obs)) + geom_bar() +
+  labs(title = "Number of Observations by Year",
+       x = "Year",
+       y = "Number of Observations")
+
+years <- levels(obs_within$year_obs)
+
+year.pal <- colorFactor("magma", domain = years)
+m1 <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = the_beaches,
+              color = "lightblue")
+
+for (i in years) {
+  m1 <- m1 %>% addCircles(data = subset(obs_within, year_obs == i),
+                          group = i,
+                          color = ~year.pal(year_obs),
+                          opacity = 1,
+                          radius = 1,
+                          weight = 4)
+}
+
+m1 <- m1 %>% addLegend("bottomright", pal = year.pal,
+                       values = obs_within$year_obs,
+                       opacity = 1,
+                       title = "iNaturalist Observations by Year") %>% 
+  addLayersControl(position = "topright", overlayGroups = years,
+                   options = layersControlOptions(collapsed = FALSE))
+m1
+```
+
+
+Tree, Green Space, and Waterbody spatial layers
+
+
+```{r, echo=FALSE}
+leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = the_beaches,
+              fillOpacity = 0) %>% 
+  addPolygons(data = water_within,
+              opacity = 1) %>% 
+  addPolygons(data = green_within,
+              color = "limegreen",
+              opacity = 1) %>% 
+  addCircles(data = trees_within,
+             color = "darkgreen",
+             opacity = 1,
+             radius = 1.5,
+             weight = 1) %>% 
+  addCircles(data = obs_within,
+             color = "orange",
+             opacity = 1,
+             radius = 2,
+             weight = 2) %>% 
+  addLegend("bottomright", colors = c("blue", "limegreen","darkgreen", "orange"),
+            labels = c("Waterbody", "Green Space", "Tree", "iNaturalist"),
+            title = "iNaturalist Observations Relative to Natural Features")
+```
