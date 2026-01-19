@@ -1,0 +1,209 @@
+---
+title: "STA490_Highpark"
+date: "2026-01-19"
+---
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(scales)
+library(stringr)
+```
+
+```{r}
+# get data for one year 2024
+# df <- read.csv("SR2024.csv")
+
+# get all data of whole 2022-2025
+files <- list.files(pattern = "^SR.*\\.csv$")
+df <- files %>%
+  lapply(read.csv) %>%
+  bind_rows()
+```
+
+```{r}
+# filter high park area "M6K", "M6R", "M6S", "M6P", and intersection
+# or filter high park area
+# df_park <- df %>%
+#   filter(First.3.Chars.of.Postal.Code == "M6K" |
+#          First.3.Chars.of.Postal.Code == "M6R" |
+#          First.3.Chars.of.Postal.Code == "M6S" |
+#          First.3.Chars.of.Postal.Code == "M6P")
+# df_park
+```
+
+```{r}
+df_park <- df %>%
+  filter(Ward == "Parkdale-High Park (04)")
+df_park
+```
+
+```{r}
+# group by Section
+df_section <- df_park %>%
+  group_by(Section) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+df_section
+```
+
+```{r}
+# Section → Major Category:
+# Waste & Environmental, Animal & Parks, Traffic & Road, Municipal Operations, # Enforcement & Investigation
+df_park <- df_park %>%
+  mutate(
+    Major_Category = case_when(
+      # Waste & Environmental
+      Section %in% c("Collections", "Waste Enforcement", "Litter Operations",
+                     "Collections and Litter Operations") 
+      ~ "Waste & Environmental",
+
+      # Animal & Parks
+      Section %in% c("Toronto Animal Services", "Parks Enforcement",
+                     "Forestry & Recreation", "Climate & Forestry", "Parks") 
+      ~ "Animal & Parks",
+
+      # Traffic & Road
+      Section %in% c("Road Operations", "Right of Way (ROW)", "Traffic Ops",
+                     "Traffic Safety", "Traffic Management", "TMC", "Transfer") 
+      ~ "Traffic & Road",
+
+      # Municipal Operations
+      Section %in% c("District Ops", "Operations", 
+                     "Business Operations Management") 
+      ~ "Municipal Operations",
+
+      # Enforcement & Investigation
+      Section %in% c("Investigation Services", "Bylaw Enforcement",
+                     "Business Licensing Enforcement", "Permits & Enforcement") 
+      ~ "Enforcement & Investigation",
+
+      TRUE ~ "Other"
+    )
+  )
+
+# Count Major Category & Proportion
+cate_counts <- df_park %>%
+  count(Major_Category, name = "count") %>%
+  mutate(
+    prop = count / sum(count),
+    label = percent(prop, accuracy = 0.1)
+  )
+
+# get Pie Chart
+ggplot(cate_counts, aes(x = "", y = prop, fill = Major_Category)) +
+  geom_col(width = 1, color = "white") +
+  coord_polar(theta = "y") +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    size = 4
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Waste & Environmental" = "blue",
+      "Animal & Parks" = "orange",
+      "Traffic & Road" = "green",
+      "Municipal Operations" = "red",
+      "Enforcement & Investigation" = "purple",
+      "Other" = "brown"
+    )
+  ) +
+  labs(
+    title = "Overall Complaint Distribution by Major Category",
+    x = NULL, y = NULL, fill = "Category"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+  )
+```
+
+```{r}
+# count in Waste & Environmental category
+df_park %>%
+  count(Section, name = "count") %>%
+  ggplot(aes(x = reorder(Section, count), y = count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  scale_y_continuous(
+    limits = c(0, 30000), 
+    breaks = seq(0, 30000, by = 5000)
+  ) +
+  labs(title = "311 Complaints by Section", x = "Section", y = "Count") +
+  theme_minimal()
+```
+
+```{r}
+# get count for each category
+df_park %>%
+  count(Major_Category, name = "count") %>%
+  arrange(desc(count))
+
+df_park %>%
+  count(Major_Category, Section, name = "count") %>%
+  arrange(Major_Category, desc(count))
+
+df_park %>%
+  count(Major_Category, Service.Request.Type, name = "count") %>%
+  arrange(Major_Category, desc(count))
+```
+
+```{r}
+cate_merge_highpark <- df_request %>%
+  mutate(
+    Request_Category = ifelse(
+      grepl("Not Picked Up", Request_Category, ignore.case = TRUE),
+      "Not Picked Up",
+      Request_Category
+    )
+  ) %>%
+  group_by(Request_Category) %>%
+  summarise(total_count = dplyr::n(), .groups = "drop") %>%
+  arrange(desc(total_count)) %>%
+  slice_head(n = 10)
+
+cate_merge_highpark
+```
+
+```{r}
+# 1) High Park: merge "Not Picked Up" into one category + count
+cate_highpark_merged <- df_request %>%
+  mutate(
+    Request_Category = ifelse(
+      str_detect(str_to_lower(Request_Category), "not picked up"),
+      "Not Picked Up",
+      Request_Category
+    )
+  ) %>%
+  group_by(Request_Category) %>%
+  summarise(total_count = n(), .groups = "drop") %>%
+  arrange(desc(total_count))
+
+# see top few after merge
+cate_highpark_merged %>% slice_head(n = 15)
+
+# 2) Top 10 bar chart
+top10_highpark <- cate_highpark_merged %>%
+  slice_head(n = 10) %>%
+  mutate(Request_Category = reorder(Request_Category, total_count))
+
+p_highpark_top10 <- ggplot(cat_merged, aes(x = reorder(Request_Category, -count), y = count)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = count), vjust = -0.3, size = 3.5) +
+  labs(
+    title = "Top 10 Service Request Categories (Merged)",
+    x = "Request Category",
+    y = "Count"
+  ) +
+  expand_limits(y = max(cat_merged$count) * 1.1) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 60, hjust = 1, size = 10),
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14)
+  )
+
+p_highpark_top10
+```
