@@ -393,7 +393,9 @@ if ("user_login" %in% names(inat_clean)) {
 
 # Introduction
 
-This individual report provides an exploratory analysis of biodiversity-related features within **The Beach BIA** area. The analysis uses iNaturalist observations together with spatial layers (tree inventory, greenspaces, and waterbodies) to (i) identify **where** observations are concentrated and (ii) summarize **how** observation volume varies across time and across spatial units (Beach BIA vs Woodbine Beach vs the broader AOI).
+This individual report provides an exploratory analysis of biodiversity-related features within **The Beach BIA** area. The analysis uses iNaturalist observations together with spatial layers (tree inventory, greenspaces, and waterbodies) to (i) identify **where** observations are concentrated and (ii) summarize **how** observation volume varies across time and across spatial units (Beach BIA vs Woodbine Beach vs the broader AOI). Unless stated otherwise, summaries and plots refer to the AOI (union + buffer), with specific comparisons reported for the Beach BIA and Woodbine Beach where relevant.
+
+iNaturalist is a citizen-science platform where people upload georeferenced observations of organisms (often with photos). Observations are identified by users and may be validated through community consensus, which makes the dataset useful for exploratory biodiversity analysis. However, because data are contributed voluntarily, iNaturalist also reflects reporting bias (e.g., where people go and what they notice), so results should be interpreted as a combined signal of biodiversity presence and public engagement.
 
 To keep this deliverable consistent with our group work, the data pipeline and spatial definitions reuse the same consolidated workflow (AOI union + buffer, consistent CRS handling, and the same iNaturalist classification rules). This document is written in a **report-style HTML format** (text + figure, minimal console noise) so it can be submitted as a standalone artifact.
 
@@ -404,14 +406,11 @@ This EDA focuses on two questions:
 1. **iNaturalist patterns:** Are there identifiable spatial and temporal patterns in the number of observations inside the AOI?
 2. **Tree density:** How does tree density vary across the Beach BIA commercial strip relative to nearby areas?
 
+These questions matter because they translate citizen-science biodiversity signals into place-based insights for the Beach BIA. Understanding where observations cluster and how they change over time can highlight potential “biodiversity touchpoints” and seasonality patterns that are relevant for outreach, stewardship, and neighbourhood engagement. Comparing tree density across the Beach BIA and a nearby waterfront park provides a complementary view of urban canopy structure, which is closely related to walkability, thermal comfort, and local greening priorities.
+
 # Data description
 
-This EDA uses four datasets:
-
-- **iNaturalist observations (CSV):** user-reported wildlife observations with geographic coordinates and observation dates. Observations are filtered to the AOI and deduplicated by observation ID when available.
-- **Tree inventory (vector layer):** point locations of trees from Toronto Open Data.
-- **Greenspaces (vector layer):** polygon boundaries of designated greenspaces.
-- **Waterbodies (vector layer):** polygon boundaries of water features.
+This analysis integrates four datasets. iNaturalist observations (CSV) provide community-reported, georeferenced sightings and serve as a proxy for biodiversity presence and engagement. The City of Toronto tree inventory (vector layer) provides point locations for recorded trees and supports canopy-related comparisons. Greenspace and waterbody polygon layers provide contextual natural features that help interpret spatial clustering in observations. Finally, the Beach BIA boundary and the Woodbine Beach polygon define the focal commercial strip and a nearby waterfront comparator, enabling comparisons across the BIA, the adjacent park area, and the broader AOI.
 
 # Methods and data preparation
 
@@ -421,17 +420,15 @@ The AOI is constructed as the **union** of: (i) the Beach BIA polygon, (ii) the 
 
 ## Cleaning and classification
 
-- iNaturalist points are converted to an `sf` point object and filtered to valid latitude/longitude.
-- Observations are assigned to broad categories using the iconic taxon field (Plants, Birds, Insects, Mammals, Reptiles, Spiders, Other).
-- For reproducibility and convenient reuse, intermediate objects are cached to GeoJSON under `Results/Biodiversity_Peter/`.
+In this report, data cleaning refers to preprocessing steps that improve consistency and usability of the raw records (e.g., removing unusable rows, standardizing fields, and ensuring valid geometry). Classification refers to grouping each iNaturalist observation into broad biological categories to support high-level summaries. Specifically, we converted iNaturalist observations into spatial features and defined the AOI using a buffer around the Beach BIA boundary; aligned coordinate reference systems (CRS) across spatial layers to ensure valid overlay operations; and used the iNaturalist “iconic taxon” field to classify observations into broad groups for composition summaries and mapping.
 
-## Snapshot summary
-
-Within the AOI (union + buffer), the filtered dataset contains **`r summary_tbl$total_obs` observations** and **`r summary_tbl$unique_species` unique species**, over an area of **`r summary_tbl$area_ha` hectares**. The tree inventory contributes **`r summary_tbl$tree_points` tree points** in the same AOI.
+## Summary Statistics
 
 ```{r tbl_summary, echo=FALSE}
 kbl(summary_tbl, caption = "Table 1. Summary statistics for the AOI used in the biodiversity EDA.")
 ```
+
+Table 1 summarizes the scale of the filtered AOI dataset. In total, the AOI contains 10,450 iNaturalist observations representing 1,577 unique species across 431.54 ha, corresponding to 3.654 species per ha. The same AOI contains 9,137 recorded tree points, and the AOI definition uses a 30 m buffer around the union polygon. These values provide context for interpreting the spatial and temporal figures below: high observation totals can reflect ecological richness, higher visitation/reporting intensity, or both, so results are interpreted with potential reporting bias in mind.
 
 # Exploratory data analysis
 
@@ -470,6 +467,8 @@ m
 saveWidget(m, file.path(OUT_DIR, "map_categories_and_trees.html"), selfcontained = TRUE)
 ```
 
+Overall, the map suggests that observations are spatially clustered rather than uniform, which is consistent with the existence of local hotspots that may be driven by greenspace access and pedestrian activity. This supports RQ1 by indicating that biodiversity-related signals (and/or reporting intensity) concentrate in specific locations. A key caveat is that clustering can be influenced by accessibility and user behaviour, not only ecological factors.
+
 ### Fig 2. Composition of observations by broad category
 
 The figure below summarizes the distribution of observations across broad categories. Because iNaturalist is user-driven, this composition reflects both ecological presence and observer behavior (e.g., which taxa are easier to detect and report).
@@ -492,6 +491,8 @@ p_cat
 ggsave(file.path(FIG_DIR, "fig2_obs_by_category.png"), p_cat, width = 8, height = 4, dpi = 300)
 ```
 
+Figure 2 shows that observations are dominated by a small number of broad groups—especially insects and birds, with plants also contributing a noticeable share. This pattern is plausible for a waterfront/greenspace-adjacent area, but it also reflects iNaturalist reporting behaviour: taxa that are visually salient and easy to photograph tend to be overrepresented, while other groups may be underreported. Therefore, composition should be interpreted as a combined signal of local biodiversity presence and observer effort rather than a complete census.
+
 ### Fig 3. Annual observation trend since 2020
 
 Aggregating by year provides a simple view of temporal variation. In practice, changes over time can reflect both ecological variation and shifts in participation (more users, more reporting, or targeted observation events).
@@ -512,6 +513,8 @@ if (!is.null(yearly)) {
 }
 ```
 
+Figure 3 indicates an overall increase in reported observations from 2020–2023, a modest dip in 2024, and the highest level in 2025. Because iNaturalist participation can grow over time and recording effort is not constant across years, this trend should not be interpreted purely as ecological change. A more conservative interpretation is that observation volume reflects a mix of biodiversity presence, platform adoption, and user activity; future analyses could standardize by season or user activity to support more comparable year-to-year contrasts.
+
 ## Question 2 — Tree density along the commercial strip
 
 To complement the spatial maps, we compute a simple density metric: **trees per km^2**, using each unit's area and the number of tree points that fall inside it.
@@ -527,7 +530,7 @@ density_woodbine <- safe_first(tree_density_tbl$trees_per_km2[tree_density_tbl$a
 density_aoi <- safe_first(tree_density_tbl$trees_per_km2[tree_density_tbl$area == "AOI buffer (union)"], 0)
 ```
 
-In Table 2, the Beach BIA density is approximately **`r round(density_bia, 0)` trees per km^2**, compared with **`r round(density_woodbine, 0)` trees per km^2** in Woodbine Beach and **`r round(density_aoi, 0)` trees per km^2** at the AOI level. These summaries are sensitive to how each polygon is defined (area) and how tree points are recorded, so they should be interpreted as *comparative* rather than absolute measures.
+Table 2 shows clear differences in tree density across spatial units. The AOI buffer (union) has the highest density at 2,117.301 trees per km^2, followed by the Beach BIA at 1,502.347 trees per km^2, while Woodbine Beach is substantially lower at 627.902 trees per km^2. This indicates that tree points are much more concentrated within the broader AOI and the BIA than within the Woodbine Beach polygon as defined in this analysis, and the comparison is sensitive to polygon boundaries and area estimates.
 
 ### Fig 4. Tree density heatmap inside the Beach BIA
 
@@ -547,20 +550,15 @@ if (requireNamespace("leaflet.extras", quietly = TRUE)) {
 }
 ```
 
-# Discussion and next steps
+Figure 4 complements Table 2 by showing within-BIA variation rather than a single area-average density. Even though the Beach BIA has a lower overall tree density than nearby spatial units, the heatmap helps identify localized clusters versus comparatively sparse segments inside the BIA boundary. This visualization is useful for interpreting the density summary as spatially heterogeneous and for motivating follow-up work that relates canopy patterns to land use or street-level features.
 
-This EDA suggests that biodiversity-related activity (as proxied by iNaturalist observations) is spatially structured in the Beach BIA AOI: observations cluster around greenspaces and the lakeshore, while the commercial corridor appears comparatively sparse. Tree density patterns similarly show heterogeneity across space—area-level averages are informative, but the heatmap highlights localized concentration and potential gaps.
+# Conclusion
 
-**Limitations and interpretation notes:**
+In conclusion, this EDA used iNaturalist observations and Toronto street-tree data to explore biodiversity-related patterns in and around the Beach BIA. Spatial visualizations suggest that observations are clustered rather than uniform, indicating potential hotspots that may reflect a combination of ecological features and reporting behaviour. Temporal and composition summaries provide additional context for interpreting these clusters and help frame how observation intensity varies across groups and years (RQ1). Tree density comparisons and the heatmap offer a complementary view of canopy structure across the Beach BIA and Woodbine Beach (RQ2).
 
-- iNaturalist is **user-generated**: observation counts reflect both ecological presence and observer effort, and may over-represent easily observed or popular taxa.
-- Spatial layers come from different sources and vintages; polygon boundaries and point inventories can shift with updates, which affects counts near borders.
-- Buffers (AOI and near-water) are small by design; results may change if these thresholds are adjusted.
+Several limitations apply. iNaturalist data are user-generated and therefore subject to uneven sampling effort, reporting bias, and potential misidentification. Boundary definitions and buffer choices affect area-based rates, and tree inventories may be incomplete or updated over time. As a result, findings should be interpreted as comparative signals rather than definitive ecological measurements.
 
-If this work is extended to a simple modelling step, two natural directions are:
-
-- **Spatial intensity modelling:** treat observations as a point process intensity surface and compare intensity near greenspace/water vs farther away.
-- **Count modelling across units:** aggregate observations to small grid cells or street segments and model counts using predictors such as distance-to-water, greenspace proportion, and tree density.
+Future work could formalize hotspot detection (e.g., kernel density surfaces or spatial clustering tests), incorporate effort-adjusted or seasonally matched comparisons, and model observation counts using environmental predictors (distance to water/greenspace, canopy indicators). Benchmarking against similar neighbourhoods would also help contextualize whether the Beach BIA patterns are distinctive or typical.
 
 # Appendix {-}
 
