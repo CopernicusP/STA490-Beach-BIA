@@ -1,0 +1,936 @@
+---
+title: "Biodiversity EDA — Neighbourhood Comparison (Peter)"
+author: "Yudian (Peter) Pan"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    number_sections: false
+    code_folding: hide
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5,
+  out.width = "95%"
+)
+
+suppressPackageStartupMessages({
+  library(sf)
+  library(dplyr)
+  library(readr)
+  library(stringr)
+  library(janitor)
+  library(lubridate)
+  library(tidyr)
+  library(ggplot2)
+  library(purrr)
+  library(rlang)
+  library(knitr)
+  library(htmlwidgets)
+  library(leaflet)
+  library(glue)
+})
+
+# Use planar ops where needed (avoid s2 surprises for unions/intersections)
+sf::sf_use_s2(FALSE)
+
+# ---------------- Parameters ----------------
+AOI_BUFFER_M <- 30     # buffer distance (meters) for union AOI
+AREA_CRS     <- 32617  # UTM 17N for Toronto (meters)
+START_DATE   <- as.Date("2020-01-01")
+
+# ---------------- Project root detection ----------------
+wd <- getwd()
+root_candidates <- unique(c(
+  wd,
+  normalizePath(file.path(wd, ".."), mustWork = FALSE),
+  normalizePath(file.path(wd, "..", ".."), mustWork = FALSE),
+  normalizePath(file.path(wd, "..", "..", ".."), mustWork = FALSE),
+  normalizePath(file.path(wd, "..", "..", "..", ".."), mustWork = FALSE)
+))
+
+ROOT <- wd
+for (cand in root_candidates) {
+  if (dir.exists(file.path(cand, "Dataset")) || dir.exists(file.path(cand, "Data")) ||
+      dir.exists(file.path(cand, "dataset")) || dir.exists(file.path(cand, "data"))) {
+    ROOT <- cand
+    break
+  }
+}
+
+# Output folders
+OUT_DIR <- file.path(ROOT, "Results", "Biodiversity_Compare_Peter")
+FIG_DIR <- file.path(ROOT, "Figures", "Biodiversity_Compare_Peter")
+dir.create(OUT_DIR, showWarnings = FALSE, recursive = TRUE)
+dir.create(FIG_DIR, showWarnings = FALSE, recursive = TRUE)
+
+# Search roots
+DATA_DIRS <- unique(c(
+  ROOT,
+  wd,
+  file.path(ROOT, "Dataset"),
+  file.path(ROOT, "Data"),
+  file.path(ROOT, "dataset"),
+  file.path(ROOT, "data"),
+  "/mnt/data"
+))
+
+
+# ---------- helpers ----------
+find_first <- function(pattern, required = TRUE) {
+  files <- unlist(lapply(DATA_DIRS, function(root) {
+    if (!dir.exists(root)) return(character(0))
+    list.files(root, pattern = pattern, recursive = TRUE, full.names = TRUE)
+  }))
+  files <- unique(files)
+  if (length(files)) return(files[1])
+  if (required) stop(glue::glue("Missing file for pattern: {pattern}"))
+  NA_character_
+}
+
+find_all <- function(pattern, required = TRUE) {
+  files <- unlist(lapply(DATA_DIRS, function(root) {
+    if (!dir.exists(root)) return(character(0))
+    list.files(root, pattern = pattern, recursive = TRUE, full.names = TRUE)
+  }))
+  files <- unique(files)
+  if (length(files)) return(files)
+  if (required) stop(glue::glue("Missing file(s) for pattern: {pattern}"))
+  character(0)
+}
+
+slugify <- function(x) {
+  x |>
+    tolower() |>
+    stringr::str_replace_all("[^a-z0-9]+", "_") |>
+    stringr::str_replace_all("^_+|_+$", "")
+}
+
+find_vector <- function(base_pat, prefer_geojson = TRUE, required = TRUE){
+  if (prefer_geojson) {
+    gj <- unlist(lapply(DATA_DIRS, function(root) {
+      if (!dir.exists(root)) return(character(0))
+      list.files(root, pattern = glue::glue("{base_pat}.*\\.geojson$"),
+                 recursive = TRUE, full.names = TRUE)
+    }))
+    gj <- unique(gj)
+    if (length(gj)) return(gj[1])
+  }
+
+  shp <- find_first(glue::glue("{base_pat}.*\\.shp$"), required = required)
+  if (is.na(shp)) return(NA_character_)
+
+  stem <- sub("\\.shp$", "", shp, ignore.case = TRUE)
+  need <- paste0(stem, c(".shx", ".dbf"))
+  if (!all(file.exists(need))) stop(glue::glue("Incomplete SHP for {basename(shp)}"))
+
+  shp
+}
+
+safe_read_sf <- function(f){
+  x <- suppressMessages(st_read(f, quiet = TRUE))
+  # If CRS is missing but data look like lon/lat, assume EPSG:4326
+  if (is.na(sf::st_crs(x))) sf::st_crs(x) <- 4326
+  # Coerce everything to EPSG:4326 for consistent overlay/mapping
+  if (!is.na(sf::st_crs(x)) && sf::st_crs(x)$epsg != 4326L) x <- sf::st_transform(x, 4326)
+  x
+}
+
+sanitize_poly <- function(g) {
+  g <- st_make_valid(g)
+  # keep polygonal geometry
+  g <- suppressWarnings(st_collection_extract(g, "POLYGON"))
+  g
+}
+
+make_single_poly <- function(sf_obj) {
+  sf_obj <- sanitize_poly(sf_obj)
+  geom <- st_union(st_combine(st_geometry(sf_obj)))
+  st_as_sf(st_sfc(geom, crs = st_crs(sf_obj)))
+}
+
+find_polygon_by_name <- function(sf_obj, pattern, fallback_all = FALSE) {
+  chr_cols <- names(sf_obj)[vapply(sf_obj, function(x) is.character(x) || is.factor(x), logical(1))]
+  hits <- sapply(chr_cols, function(col) sum(str_detect(as.character(sf_obj[[col]]), pattern), na.rm = TRUE))
+  if (length(hits) && max(hits) > 0) {
+    best <- names(which.max(hits))
+    sf_obj[str_detect(as.character(sf_obj[[best]]), pattern), ]
+  } else if (fallback_all) {
+    sf_obj
+  } else {
+    NULL
+  }
+}
+
+kbl3 <- function(x, caption = NULL) knitr::kable(x, caption = caption, digits = 3)
+```
+
+# Inputs (iNaturalist exports + Toronto Open Data layers)
+
+```{r resolve_files}
+# --- iNaturalist CSVs ---
+# IMPORTANT: we now load *all* observations-*.csv we can find and combine them.
+# This avoids "empty plots" when one export only covers one neighbourhood (e.g., High Park).
+inat_files <- find_all("observations(-[0-9]+)?\\.csv$")
+inat_files <- inat_files[!grepl("fields\\.csv$", inat_files, ignore.case = TRUE)]
+if (!length(inat_files)) stop("No iNaturalist CSVs found. Expected files like observations-670364.csv")
+
+# Print what we found (so you can confirm Beaches + High Park are both present)
+tibble::tibble(iNat_file = basename(inat_files), path = inat_files) |> kbl3(caption = "Detected iNaturalist exports")
+
+# --- spatial layers ---
+paths <- list(
+  neigh  = find_vector("(Neighbourhoods.*4326)", prefer_geojson = FALSE),
+  green  = find_vector("Green\\s*Spaces.*4326", prefer_geojson = FALSE),
+  trees  = find_vector("(TOPO_TREE_WGS84)",      prefer_geojson = FALSE),
+  water  = find_vector("(TOPO_Waterbody_WGS84)", prefer_geojson = FALSE),
+  woodbine = find_vector("(WoodbineBeach)",      prefer_geojson = FALSE, required = FALSE),
+  bia = find_vector("(Business.*Areas.*4326|Business.*Improvement.*Areas.*4326|BIA.*4326|Business_Improvement)", prefer_geojson = TRUE)
+)
+
+paths
+```
+
+# Load + standardize iNaturalist points (combined)
+
+```{r inat_points}
+guess_col <- function(df, candidates){
+  cand <- intersect(candidates, names(df))
+  if (length(cand)) cand[1] else NA_character_
+}
+
+read_one_inat <- function(f) {
+  df <- readr::read_csv(f, show_col_types = FALSE) |> janitor::clean_names()
+
+  lat_col <- guess_col(df, c("latitude","lat","y","wei_du","纬度"))
+  lon_col <- guess_col(df, c("longitude","lon","long","x","jing_du","经度"))
+  date_col <- guess_col(df, c("observed_on","observed_on_string","time_observed_at","date","observed_on_date","guan_cha_ri_qi","观察日期"))
+  sci_col  <- guess_col(df, c("scientific_name","taxon_name","name","xue_ming","学名","scientific"))
+  com_col  <- guess_col(df, c("common_name","com_name","common"))
+  iconic_col <- guess_col(df, c("iconic_taxon_name","taxon_iconic_name","iconic_taxon","biao_zhi_lei_qun","标志类群"))
+
+  id_col <- guess_col(df, c("id","observation_id","obs_id"))
+
+  if (any(is.na(c(lat_col, lon_col)))) stop(glue::glue("Missing lat/lon columns in: {basename(f)}"))
+
+  out <- df |>
+    mutate(
+      latitude  = suppressWarnings(as.numeric(.data[[lat_col]])),
+      longitude = suppressWarnings(as.numeric(.data[[lon_col]])),
+      date = if (!is.na(date_col)) as.Date(.data[[date_col]]) else NA_Date_,
+      scientific_name = if (!is.na(sci_col)) as.character(.data[[sci_col]]) else NA_character_,
+      common_name = if (!is.na(com_col)) as.character(.data[[com_col]]) else NA_character_,
+      iconic_taxon_name = if (!is.na(iconic_col)) as.character(.data[[iconic_col]]) else NA_character_,
+      observation_id = if (!is.na(id_col)) as.character(.data[[id_col]]) else NA_character_,
+      source_file = basename(f)
+    ) |>
+    filter(!is.na(latitude), !is.na(longitude),
+           between(latitude,-90,90), between(longitude,-180,180))
+
+  # broad category (same mapping as before)
+  out <- out |>
+    mutate(
+      category = case_when(
+        str_detect(iconic_taxon_name, regex("Plantae",  TRUE)) ~ "Plants",
+        str_detect(iconic_taxon_name, regex("Aves",     TRUE)) ~ "Birds",
+        str_detect(iconic_taxon_name, regex("Insecta",  TRUE)) ~ "Insects",
+        str_detect(iconic_taxon_name, regex("Mammalia", TRUE)) ~ "Mammals",
+        str_detect(iconic_taxon_name, regex("Reptilia", TRUE)) ~ "Reptiles",
+        str_detect(iconic_taxon_name, regex("Arachnida",TRUE)) ~ "Spiders",
+        TRUE ~ "Other"
+      )
+    )
+
+  out
+}
+
+inat <- purrr::map_dfr(inat_files, read_one_inat)
+
+# deduplicate if we have IDs
+if (any(!is.na(inat$observation_id)) && any(nchar(inat$observation_id) > 0)) {
+  inat <- inat |> distinct(observation_id, .keep_all = TRUE)
+}
+
+inat_sf <- st_as_sf(inat, coords = c("longitude","latitude"), crs = 4326, remove = FALSE)
+
+# quick check: file-wise extents
+inat_bbox <- inat |> group_by(source_file) |>
+  summarise(
+    n = n(),
+    min_lat = min(latitude), max_lat = max(latitude),
+    min_lon = min(longitude), max_lon = max(longitude),
+    .groups = "drop"
+  ) |> arrange(desc(n))
+
+kbl3(inat_bbox, caption = "iNaturalist exports — basic extent check (by source file)")
+```
+
+# Load spatial layers + define comparison units
+
+```{r load_layers}
+neigh  <- safe_read_sf(paths$neigh)
+green  <- safe_read_sf(paths$green)
+trees  <- safe_read_sf(paths$trees)
+water  <- safe_read_sf(paths$water)
+bia    <- safe_read_sf(paths$bia)
+
+woodbine <- if (!is.na(paths$woodbine)) {
+  tryCatch(safe_read_sf(paths$woodbine), error = function(e) NULL)
+} else NULL
+
+# ---------------- Neighbourhood polygons ----------------
+pat_beaches  <- regex("(^|\\b)the\\s*beaches(\\b|$)", ignore_case = TRUE)
+pat_highpark <- regex("high\\s*park", ignore_case = TRUE)  # should capture "High Park-Swansea"
+
+neigh_beaches <- find_polygon_by_name(neigh, pat_beaches, fallback_all = FALSE)
+if (!is.null(neigh_beaches) && nrow(neigh_beaches) > 1) neigh_beaches <- make_single_poly(neigh_beaches)
+
+neigh_highpark <- find_polygon_by_name(neigh, pat_highpark, fallback_all = FALSE)
+if (!is.null(neigh_highpark) && nrow(neigh_highpark) > 1) neigh_highpark <- make_single_poly(neigh_highpark)
+
+if (is.null(neigh_beaches) || nrow(neigh_beaches) == 0) stop("Could not locate neighbourhood polygon for 'The Beaches'.")
+if (is.null(neigh_highpark) || nrow(neigh_highpark) == 0) warning("Could not locate 'High Park' neighbourhood polygon. Comparison will skip it.")
+
+# ---------------- Beach BIA polygon ----------------
+pat_bia <- regex("(^|\\b)(the\\s*beach|the\\s*beaches|beach|beaches)(\\b|$)", ignore_case = TRUE)
+beach_bia_raw <- find_polygon_by_name(bia, pat_bia, fallback_all = TRUE) |> make_single_poly()
+
+# "Exact" BIA: clip to The Beaches neighbourhood if possible
+beach_bia_exact <- tryCatch({
+  suppressWarnings(st_intersection(sanitize_poly(neigh_beaches), sanitize_poly(beach_bia_raw))) |> sanitize_poly()
+}, error = function(e) beach_bia_raw)
+beach_bia_exact <- make_single_poly(beach_bia_exact)
+
+# ---------------- Woodbine polygon ----------------
+# Prefer dedicated WoodbineBeach SHP; otherwise try to find Woodbine in Green Spaces
+if (is.null(woodbine) || nrow(woodbine) == 0) {
+  gr_chr <- names(green)[vapply(green, function(x) is.character(x) || is.factor(x), logical(1))]
+  idx <- Reduce(`|`, lapply(gr_chr, function(col) str_detect(tolower(green[[col]]), "woodbine")))
+  woodbine <- green[idx,]
+}
+woodbine <- make_single_poly(woodbine)
+
+# ---------------- Union + buffer AOI ----------------
+parts_4326 <- list(beach_bia_exact, woodbine, neigh_beaches) |>
+  purrr::discard(~ is.null(.x) || nrow(.x) == 0) |>
+  lapply(make_single_poly)
+
+geoms_4326 <- do.call(c, lapply(parts_4326, st_geometry))
+geoms_proj <- st_transform(geoms_4326, AREA_CRS)
+aoi_union  <- st_union(st_combine(geoms_proj))
+aoi_buf    <- st_buffer(aoi_union, AOI_BUFFER_M) |> st_transform(4326) |> st_as_sf()
+
+# ---------------- Units list ----------------
+units <- list(
+  "Beach BIA (exact)" = beach_bia_exact,
+  "AOI (union+buffer)" = aoi_buf,
+  "The Beaches (Neighbourhood)" = neigh_beaches,
+  "Woodbine Beach" = woodbine
+)
+
+if (!is.null(neigh_highpark) && nrow(neigh_highpark) > 0) {
+  units[["High Park(-Swansea) (Neighbourhood)"]] <- neigh_highpark
+}
+
+# Confirm areas (km^2) quickly
+unit_area_km2 <- purrr::imap_dbl(units, ~ as.numeric(st_area(st_transform(.x, AREA_CRS))) / 1e6)
+tibble::tibble(unit = names(units), area_km2 = unit_area_km2) |> arrange(desc(area_km2)) |> kbl3(caption="Unit areas (km^2)")
+```
+
+# Summary statistics across units (trees/km² and sightings/km²)
+
+```{r summary_stats}
+summarise_unit <- function(poly, name) {
+  poly <- sanitize_poly(poly)
+  area_km2 <- as.numeric(st_area(st_transform(poly, AREA_CRS))) / 1e6
+
+  inat_u  <- suppressWarnings(st_filter(inat_sf, poly))
+  trees_u <- suppressWarnings(st_filter(trees,   poly))
+
+  obs_n <- nrow(inat_u)
+  sp_n  <- dplyr::n_distinct(na.omit(inat_u$scientific_name))
+  tree_n <- nrow(trees_u)
+
+  tibble::tibble(
+    unit = name,
+    area_km2 = area_km2,
+    sightings = obs_n,
+    unique_species = sp_n,
+    trees = tree_n,
+    sightings_per_km2 = ifelse(is.finite(area_km2) & area_km2 > 0, obs_n / area_km2, NA_real_),
+    trees_per_km2 = ifelse(is.finite(area_km2) & area_km2 > 0, tree_n / area_km2, NA_real_)
+  )
+}
+
+summary_units <- purrr::imap_dfr(units, summarise_unit) |>
+  arrange(desc(sightings_per_km2))
+
+readr::write_csv(summary_units, file.path(OUT_DIR, "summary_units_density.csv"))
+kbl3(summary_units, caption = "Summary statistics across spatial units (area, sightings, trees, and densities).")
+```
+
+# Quick diagnostic: which unit actually has iNaturalist points?
+
+```{r diag_units}
+summary_units |>
+  select(unit, sightings) |>
+  arrange(desc(sightings)) |>
+  kbl3(caption = "Sightings per unit (if some are 0, it usually means your exports don't cover that region).")
+```
+
+# Maps + core plots for selected units
+
+```{r select_focus}
+# Pick 2 focus units automatically: the two non-AOI units with the most sightings.
+focus_units <- c(
+  "Beach BIA (exact)",
+  "AOI (union+buffer)",
+  "The Beaches (Neighbourhood)",
+  "Woodbine Beach",
+  "High Park(-Swansea) (Neighbourhood)"
+)
+focus_units <- intersect(focus_units, summary_units$unit)
+```
+
+## 1) Map: iNaturalist observations by category (focus units)
+
+```{r fig_boundaries, echo=TRUE}
+# Boundary overlay map (Exact BIA vs AOI union+buffer vs neighbourhoods)
+boundary_map <- leaflet(options = leafletOptions(minZoom = 10)) |>
+  addProviderTiles("CartoDB.Positron")
+
+# Add available polygons as toggleable layers
+add_poly_layer <- function(m, poly, nm, col) {
+  if (is.null(poly) || nrow(poly) == 0) return(m)
+  m |>
+    addPolygons(
+      data = sanitize_poly(poly),
+      color = col, weight = 2,
+      fillOpacity = 0.05,
+      group = nm
+    )
+}
+
+boundary_map <- boundary_map |>
+  add_poly_layer(units[["Beach BIA (exact)"]], "Beach BIA (exact)", "#d7301f") |>
+  add_poly_layer(units[["AOI (union+buffer)"]], "AOI (union+buffer)", "#2b8cbe") |>
+  add_poly_layer(units[["The Beaches (Neighbourhood)"]], "The Beaches (Neighbourhood)", "#31a354") |>
+  add_poly_layer(units[["Woodbine Beach"]], "Woodbine Beach", "#756bb1")
+
+if ("High Park(-Swansea) (Neighbourhood)" %in% names(units)) {
+  boundary_map <- boundary_map |>
+    add_poly_layer(units[["High Park(-Swansea) (Neighbourhood)"]], "High Park(-Swansea) (Neighbourhood)", "#636363")
+}
+
+boundary_map <- boundary_map |>
+  addLayersControl(
+    overlayGroups = c(
+      "Beach BIA (exact)",
+      "AOI (union+buffer)",
+      "The Beaches (Neighbourhood)",
+      "Woodbine Beach",
+      if ("High Park(-Swansea) (Neighbourhood)" %in% names(units)) "High Park(-Swansea) (Neighbourhood)" else NULL
+    ) |> unlist(),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+boundary_map
+htmlwidgets::saveWidget(boundary_map, file.path(OUT_DIR, "map_boundaries_overlay.html"), selfcontained = TRUE)
+```
+
+```{r fig_maps_by_unit, echo=TRUE, results='asis'}
+# Interactive maps for EACH unit (so High Park / BIA / Woodbine etc all appear)
+# Notes:
+# - Sampling is used for performance when there are many points.
+# - Marker clustering keeps the widget responsive.
+make_inat_map <- function(poly, title, max_points = 25000) {
+  poly <- sanitize_poly(poly)
+  pts <- suppressWarnings(st_filter(inat_sf, poly))
+
+  if (nrow(pts) == 0) {
+    m <- leaflet(options = leafletOptions(minZoom = 10)) |>
+      addProviderTiles("CartoDB.Positron") |>
+      addPolygons(data = poly, color = "#444", weight = 2, fillOpacity = 0.05) |>
+      addControl(html = glue("<b>{title}</b><br/>0 observations in current iNaturalist exports."), position = "topright")
+    return(m)
+  }
+
+  
+# Sample for performance
+if (nrow(pts) > max_points) {
+  set.seed(1)
+  pts <- pts |> dplyr::slice_sample(n = max_points)
+}
+
+cluster_opts <- markerClusterOptions()
+
+  m <- leaflet(options = leafletOptions(minZoom = 10)) |>
+    addProviderTiles("CartoDB.Positron") |>
+    addPolygons(data = poly, color = "#444", weight = 2, fillOpacity = 0.05, group = "Boundary")
+
+  add_cat <- function(m, cat, col, op = 0.85) {
+    sub <- dplyr::filter(pts, category == cat)
+    if (nrow(sub) == 0) return(m)
+    m |>
+      addCircleMarkers(
+        data = sub, radius = 2, color = col,
+        stroke = FALSE, fillOpacity = op,
+        group = cat,
+        clusterOptions = cluster_opts
+      )
+  }
+
+  m <- m |>
+    add_cat("Plants",   "#2ca25f") |>
+    add_cat("Birds",    "#3182bd") |>
+    add_cat("Insects",  "#fd8d3c") |>
+    add_cat("Mammals",  "#756bb1") |>
+    add_cat("Reptiles", "#41ab5d") |>
+    add_cat("Spiders",  "#636363") |>
+    add_cat("Other",    "#969696", op = 0.75) |>
+    addLayersControl(
+      overlayGroups = c("Plants","Birds","Insects","Mammals","Reptiles","Spiders","Other"),
+      options = layersControlOptions(collapsed = FALSE)
+    ) |>
+    addControl(html = glue("<b>{title}</b><br/>{nrow(pts)} points shown (sampling may apply)."), position = "topright")
+
+  m
+}
+
+units_to_map <- units
+# (Optional) Skip AOI if you feel it is too large/heavy to render points
+# units_to_map <- units_to_map[setdiff(names(units_to_map), "AOI (union+buffer)")]
+
+purrr::iwalk(units_to_map, function(poly, nm) {
+  cat(glue("## Map — iNaturalist by category: {nm}
+
+"))
+  m <- make_inat_map(poly, nm, max_points = 25000)
+  print(m)
+  htmlwidgets::saveWidget(m, file.path(OUT_DIR, paste0("map_inat_by_category_", slugify(nm), ".html")), selfcontained = TRUE)
+  cat("
+
+")
+})
+```
+
+
+## 2) Category counts (focus units)
+
+```{r fig_bar_category_focus}
+plot_cat_counts <- function(poly, name) {
+  pts <- suppressWarnings(st_filter(inat_sf, sanitize_poly(poly)))
+  if (nrow(pts) == 0) return(NULL)
+
+  cat_counts <- pts |>
+    st_drop_geometry() |>
+    count(category, name = "count") |>
+    arrange(desc(count)) |>
+    mutate(category = factor(category, levels = category))
+
+  p <- ggplot(cat_counts, aes(category, count)) +
+    geom_col() +
+    labs(title = paste0(name, " — sightings by category"), x = NULL, y = "Sightings") +
+    theme_minimal()
+
+  ggsave(file.path(FIG_DIR, paste0("cat_counts_", gsub("[^A-Za-z0-9]+","_",tolower(name)), ".png")), p, width = 9, height = 5, dpi = 300)
+  p
+}
+
+for (nm in focus_units) {
+  p <- plot_cat_counts(units[[nm]], nm)
+  if (!is.null(p)) print(p)
+}
+```
+
+## 3) Yearly + monthly trend (focus units)
+
+```{r fig_trend_focus}
+plot_trends <- function(poly, name) {
+  pts <- suppressWarnings(st_filter(inat_sf, sanitize_poly(poly)))
+  df <- pts |> st_drop_geometry() |> filter(!is.na(date), date >= START_DATE)
+  if (nrow(df) == 0) return(NULL)
+
+  df <- df |> mutate(year = year(date), month = month(date, label = TRUE, abbr = TRUE))
+
+  yearly <- df |> count(year, name = "sightings") |> arrange(year)
+  monthly <- df |> count(month, name = "sightings") |> arrange(month)
+
+  p1 <- ggplot(yearly, aes(x = year, y = sightings)) +
+    geom_line() + geom_point() +
+    labs(title = paste0(name, " — yearly trend"), x = "Year", y = "Sightings") +
+    theme_minimal()
+
+  p2 <- ggplot(monthly, aes(x = month, y = sightings, group = 1)) +
+    geom_line() + geom_point() +
+    labs(title = paste0(name, " — monthly seasonality"), x = "Month", y = "Sightings") +
+    theme_minimal()
+
+  ggsave(file.path(FIG_DIR, paste0("trend_year_", gsub("[^A-Za-z0-9]+","_",tolower(name)), ".png")), p1, width = 9, height = 5, dpi = 300)
+  ggsave(file.path(FIG_DIR, paste0("trend_month_", gsub("[^A-Za-z0-9]+","_",tolower(name)), ".png")), p2, width = 9, height = 5, dpi = 300)
+
+  list(p1 = p1, p2 = p2)
+}
+
+for (nm in focus_units) {
+  res <- plot_trends(units[[nm]], nm)
+  if (!is.null(res)) { print(res$p1); print(res$p2) }
+}
+```
+
+## 4) Top species (scientific + common) (focus units)
+
+```{r fig_top_species_focus}
+plot_top_species <- function(poly, name, n_top = 15) {
+  pts <- suppressWarnings(st_filter(inat_sf, sanitize_poly(poly)))
+  df <- pts |> st_drop_geometry()
+  if (nrow(df) == 0) return(NULL)
+
+  if (all(is.na(df$scientific_name)) && all(is.na(df$common_name))) return(NULL)
+
+  # scientific
+  if (!all(is.na(df$scientific_name))) {
+    top_sci <- df |> filter(!is.na(scientific_name) & scientific_name != "") |>
+      count(scientific_name, sort = TRUE) |> slice_head(n = 10) |>
+      mutate(scientific_name = factor(scientific_name, levels = rev(scientific_name)))
+
+    p_sci <- ggplot(top_sci, aes(scientific_name, n)) +
+      geom_col() + coord_flip() +
+      labs(title = paste0(name, " — top 10 species (scientific)"), x = NULL, y = "Sightings") +
+      theme_minimal()
+
+    ggsave(file.path(FIG_DIR, paste0("top10_scientific_", gsub("[^A-Za-z0-9]+","_",tolower(name)), ".png")), p_sci, width = 9, height = 5, dpi = 300)
+    print(p_sci)
+  }
+
+  # common
+  if (!all(is.na(df$common_name))) {
+    top_com <- df |> filter(!is.na(common_name) & common_name != "") |>
+      count(common_name, sort = TRUE) |> slice_head(n = n_top) |>
+      mutate(common_name = factor(common_name, levels = rev(common_name)))
+
+    p_com <- ggplot(top_com, aes(common_name, n)) +
+      geom_col() + coord_flip() +
+      labs(title = paste0(name, " — top ", n_top, " species (common name)"), x = NULL, y = "Sightings") +
+      theme_minimal()
+
+    ggsave(file.path(FIG_DIR, paste0("top_common_", gsub("[^A-Za-z0-9]+","_",tolower(name)), ".png")), p_com, width = 9, height = 6, dpi = 300)
+    print(p_com)
+  }
+}
+
+for (nm in focus_units) plot_top_species(units[[nm]], nm, n_top = 15)
+```
+
+# Neighbourhood EDA — High Park(-Swansea) (mirrors the Beaches figures)
+
+```{r highpark_clip}
+# --- guard: make the failure explicit if you run this chunk alone ---
+if (!exists("inat_sf")) stop("`inat_sf` not found. Run chunks up to `inat_points` first (or Knit from top).")
+if (!exists("trees"))  stop("`trees` not found. Run chunks up to `load_layers` first (or Knit from top).")
+
+if ("High Park(-Swansea) (Neighbourhood)" %in% names(units)) {
+
+  highpark_poly <- units[["High Park(-Swansea) (Neighbourhood)"]] |> sanitize_poly()
+
+  # Project polygon to UTM and KEEP ONLY polygon geometry (st_make_valid can return GEOMETRYCOLLECTION)
+  hp_m <- st_transform(highpark_poly, AREA_CRS) |>
+    sanitize_poly() |>
+    make_single_poly()
+
+  # Project points
+  inat_m  <- st_transform(inat_sf, AREA_CRS)
+  trees_m <- st_transform(trees,   AREA_CRS)
+
+  # Use unioned polygon geometry (single target) -> stable logical index
+  hp_geom <- st_union(st_geometry(hp_m))
+
+  idx_inat  <- lengths(st_intersects(inat_m,  hp_geom)) > 0
+  idx_trees <- lengths(st_intersects(trees_m, hp_geom)) > 0
+
+  inat_highpark  <- inat_sf[idx_inat, ]
+  trees_highpark <- trees[idx_trees, ]
+
+} else {
+  highpark_poly  <- NULL
+  inat_highpark  <- inat_sf[0, ]
+  trees_highpark <- trees[0, ]
+}
+```
+
+## 1) Bar: category counts (High Park)
+
+```{r fig_bar_category_highpark}
+if (!is.null(highpark_poly) && nrow(inat_highpark) > 0) {
+  cat_counts_hp <- inat_highpark |>
+    st_drop_geometry() |>
+    count(category, name = "count") |>
+    arrange(desc(count)) |>
+    mutate(category = factor(category, levels = category))
+
+  p_cat_hp <- ggplot(cat_counts_hp, aes(category, count)) +
+  geom_col() +
+  labs(title = "High Park(-Swansea) — iNaturalist sightings by category", x = NULL, y = "Sightings") +
+  theme_minimal()
+
+  print(p_cat_hp)
+  ggsave(file.path(FIG_DIR, "highpark_category_counts.png"), plot = p_cat_hp, width = 9, height = 5, dpi = 300)
+} else {
+  cat("High Park polygon not found, or 0 sightings in the current iNaturalist exports.")
+}
+```
+
+## 2) Annual trend (High Park)
+
+```{r fig_annual_highpark}
+if (!is.null(highpark_poly) && nrow(inat_highpark) > 0 && "date" %in% names(inat_highpark)) {
+  yearly_hp <- inat_highpark |>
+    st_drop_geometry() |>
+    filter(!is.na(date), date >= START_DATE) |>
+    count(year = lubridate::year(date), name = "sightings") |>
+    arrange(year)
+
+  p_year_hp <- ggplot(yearly_hp, aes(factor(year), sightings)) +
+  geom_col() +
+  labs(title = "High Park(-Swansea) — annual iNaturalist sightings", x = "Year", y = "Sightings") +
+  theme_minimal()
+
+  print(p_year_hp)
+  ggsave(file.path(FIG_DIR, "highpark_annual_sightings.png"), plot = p_year_hp, width = 9, height = 5, dpi = 300)
+}
+```
+
+## 3) Top-10 species (High Park)
+
+```{r fig_top10_species_highpark}
+if (!is.null(highpark_poly) && nrow(inat_highpark) > 0 && "scientific_name" %in% names(inat_highpark)) {
+  top10_hp <- inat_highpark |>
+    st_drop_geometry() |>
+    count(scientific_name, sort = TRUE) |>
+    slice_head(n = 10) |>
+    mutate(scientific_name = factor(scientific_name, levels = rev(scientific_name)))
+
+  p_top10_hp <- ggplot(top10_hp, aes(scientific_name, n)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "High Park(-Swansea) — top 10 species by sightings", x = NULL, y = "Sightings") +
+  theme_minimal()
+
+print(p_top10_hp)
+ggsave(file.path(FIG_DIR, "highpark_top10_species.png"), plot = p_top10_hp, width = 9, height = 5, dpi = 300)
+}
+```
+
+# Optional: proximity to water (50m buffer) — Beaches vs High Park
+
+```{r water_proximity_optional}
+if (!is.null(water) && nrow(water) > 0) {
+
+  units_water_focus <- c("The Beaches (Neighbourhood)", "High Park(-Swansea) (Neighbourhood)")
+  units_water_focus <- units_water_focus[units_water_focus %in% names(units)]
+
+  # project once for speed + robustness
+  inat_m  <- st_transform(inat_sf, AREA_CRS)
+  water_m <- st_transform(water,  AREA_CRS)
+
+  water_results <- purrr::map_dfr(units_water_focus, function(nm) {
+
+    poly    <- sanitize_poly(units[[nm]])
+    poly_m  <- st_make_valid(st_transform(poly, AREA_CRS))
+
+    # clip obs using UTM intersects
+    idx_obs <- lengths(st_intersects(inat_m, poly_m)) > 0
+    obs_m   <- inat_m[idx_obs, ]
+    total_obs <- nrow(obs_m)
+
+    if (total_obs == 0) {
+      return(tibble(unit = nm, total_obs = 0L, near_water = 0L, share_near_water = NA_real_))
+    }
+
+    # clip water to polygon using UTM intersects
+    idx_w   <- lengths(st_intersects(water_m, poly_m)) > 0
+    w_m     <- water_m[idx_w, ]
+
+    if (nrow(w_m) == 0) {
+      return(tibble(unit = nm, total_obs = total_obs, near_water = 0L, share_near_water = 0))
+    }
+
+    water_buf <- st_buffer(st_union(st_make_valid(w_m)), 50)  # 50m buffer
+    near <- lengths(st_intersects(obs_m, water_buf)) > 0
+
+    tibble(
+      unit = nm,
+      total_obs = total_obs,
+      near_water = sum(near, na.rm = TRUE),
+      share_near_water = mean(near, na.rm = TRUE)
+    )
+  })
+
+  water_results
+
+  if (nrow(water_results) > 0) {
+    p_water <- ggplot(water_results |> filter(!is.na(share_near_water)),
+                  aes(x = reorder(unit, share_near_water), y = share_near_water)) +
+  geom_col() +
+  coord_flip() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title = "Share of iNaturalist observations within 50m of water", x = NULL, y = "Share") +
+  theme_minimal()
+
+print(p_water)
+ggsave(file.path(FIG_DIR, "water_proximity_share.png"), plot = p_water, width = 9, height = 4.5, dpi = 300)
+  }
+}
+```
+
+# Comparison plots across units
+
+## A) Sightings/km² and trees/km²
+
+```{r fig_density_compare}
+dens_long <- summary_units |>
+  select(unit, sightings_per_km2, trees_per_km2) |>
+  pivot_longer(-unit, names_to = "metric", values_to = "value") |>
+  mutate(metric = recode(metric,
+                         sightings_per_km2 = "Sightings per km²",
+                         trees_per_km2 = "Trees per km²"))
+
+p_dens <- ggplot(dens_long, aes(x = reorder(unit, value), y = value)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~metric, scales = "free_x") +
+  labs(title = "Density comparison across units", x = NULL, y = NULL) +
+  theme_minimal()
+
+p_dens
+ggsave(file.path(FIG_DIR, "density_compare_units.png"), p_dens, width = 10, height = 6, dpi = 300)
+```
+
+## B) Category composition (share) across units
+
+```{r fig_category_share_units}
+cat_by_unit <- purrr::imap_dfr(units, function(poly, nm){
+  pts <- suppressWarnings(st_filter(inat_sf, sanitize_poly(poly)))
+  if (nrow(pts) == 0) return(tibble::tibble(unit = nm, category = character(), n = integer(), share = numeric()))
+  pts |>
+    st_drop_geometry() |>
+    count(category, name = "n") |>
+    mutate(unit = nm, share = n / sum(n))
+})
+
+p_share <- ggplot(cat_by_unit, aes(x = category, y = share, fill = category)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~unit, scales = "free_x") +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(title = "Category composition (share) by unit", x = NULL, y = "Share of sightings") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_share
+ggsave(file.path(FIG_DIR, "category_share_units.png"), p_share, width = 12, height = 7, dpi = 300)
+```
+
+# Green space vs non-green space comparison (per unit)
+
+```{r greenspace_flag}
+summarise_green_vs_non <- function(poly, name) {
+  poly <- sanitize_poly(poly)
+  area_total_km2 <- as.numeric(st_area(st_transform(poly, AREA_CRS))) / 1e6
+
+  green_clip <- tryCatch({
+    suppressWarnings(st_intersection(sanitize_poly(green), poly)) |> sanitize_poly()
+  }, error = function(e) NULL)
+
+  inat_u  <- suppressWarnings(st_filter(inat_sf, poly))
+  trees_u <- suppressWarnings(st_filter(trees,   poly))
+
+  if (is.null(green_clip) || nrow(green_clip) == 0) {
+    return(tibble::tibble(
+      unit = name,
+      zone = c("Non-green", "Green"),
+      area_km2 = c(area_total_km2, 0),
+      sightings = c(nrow(inat_u), 0),
+      trees = c(nrow(trees_u), 0)
+    ))
+  }
+
+  area_green_km2 <- sum(as.numeric(st_area(st_transform(green_clip, AREA_CRS))) / 1e6)
+  area_nongreen_km2 <- max(area_total_km2 - area_green_km2, 0)
+
+  in_green_obs  <- lengths(st_intersects(inat_u,  green_clip)) > 0
+  in_green_tree <- lengths(st_intersects(trees_u, green_clip)) > 0
+
+  tibble::tibble(
+    unit = name,
+    zone = c("Green", "Non-green"),
+    area_km2 = c(area_green_km2, area_nongreen_km2),
+    sightings = c(sum(in_green_obs), sum(!in_green_obs)),
+    trees = c(sum(in_green_tree), sum(!in_green_tree))
+  )
+}
+
+green_vs_non <- purrr::imap_dfr(units, summarise_green_vs_non) |>
+  mutate(
+    sightings_per_km2 = ifelse(is.finite(area_km2) & area_km2 > 0, sightings / area_km2, NA_real_),
+    trees_per_km2 = ifelse(is.finite(area_km2) & area_km2 > 0, trees / area_km2, NA_real_)
+  )
+
+readr::write_csv(green_vs_non, file.path(OUT_DIR, "greenspace_vs_nongreenspace.csv"))
+kbl3(green_vs_non, caption = "Green space vs non-green space summaries within each unit.")
+```
+
+```{r fig_green_vs_non}
+g_long <- green_vs_non |>
+  select(unit, zone, sightings_per_km2, trees_per_km2) |>
+  pivot_longer(cols = c(sightings_per_km2, trees_per_km2),
+               names_to = "metric", values_to = "value") |>
+  mutate(metric = recode(metric,
+                         sightings_per_km2 = "Sightings per km²",
+                         trees_per_km2 = "Trees per km²"))
+
+p_g <- ggplot(g_long, aes(x = zone, y = value)) +
+  geom_col() +
+  facet_grid(metric ~ unit, scales = "free_y") +
+  labs(title = "Green vs non-green density comparison", x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p_g
+ggsave(file.path(FIG_DIR, "greenspace_vs_nongreen_density.png"), p_g, width = 14, height = 6, dpi = 300)
+```
+
+# Optional: tree heatmaps (interactive) for multiple units
+
+```{r tree_heatmap_optional}
+make_tree_heatmap <- function(poly, name_stub) {
+  if (!requireNamespace("leaflet.extras", quietly = TRUE)) return(NULL)
+
+  poly <- sanitize_poly(poly)
+  trees_u <- suppressWarnings(st_filter(trees, poly))
+  if (nrow(trees_u) == 0) return(NULL)
+
+  m <- leaflet() |>
+    addProviderTiles("CartoDB.Positron") |>
+    addPolygons(data = poly, color = "#cc0000", weight = 2, fillOpacity = 0.05) |>
+    leaflet.extras::addHeatmap(data = trees_u, radius = 12, blur = 18, max = 0.6)
+
+  htmlwidgets::saveWidget(m, file.path(OUT_DIR, paste0("tree_heatmap_", name_stub, ".html")), selfcontained = TRUE)
+  m
+}
+
+# Heatmaps for: exact BIA + both neighbourhoods (when tree points exist)
+make_tree_heatmap(units[["Beach BIA (exact)"]], "bia_exact")
+make_tree_heatmap(units[["The Beaches (Neighbourhood)"]], "beaches_neigh")
+if ("High Park(-Swansea) (Neighbourhood)" %in% names(units)) {
+  make_tree_heatmap(units[["High Park(-Swansea) (Neighbourhood)"]], "highpark_neigh")
+}
+```
