@@ -99,7 +99,11 @@ for (g in groups) {
   map1 <- map1 %>% addCircles(data    = subset(obs_within, 
                                                category == g),
                               group   = g,
-                              label   = g,
+                              popup   = ~paste0(obs_within$common_name, 
+                                                "<br>Category: ", 
+                                                obs_within$category,
+                                                "<br>Observed on: ",
+                                                obs_within$observed_on),
                               color   = ~species_cat.pal(g),
                               radius  = 1,
                               opacity = 1,
@@ -116,6 +120,8 @@ map1 <- map1 %>%
             opacity = 1)
 
 map1
+
+saveWidget(map1, file = "widgets/map1.html")
 ```
 
 
@@ -223,6 +229,8 @@ map3 <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>%
                    options       = layersControlOptions(collapsed = FALSE))
 
 map3
+
+saveWidget(map3, file = "widgets/map3.html")
 ```
 
 
