@@ -120,8 +120,7 @@ map1 <- map1 %>%
             opacity = 1)
 
 map1
-
-saveWidget(map1, file = "widgets/map1.html")
+# saveWidget(map1, file = "widgets/map1.html")
 ```
 
 
@@ -229,8 +228,7 @@ map3 <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>%
                    options       = layersControlOptions(collapsed = FALSE))
 
 map3
-
-saveWidget(map3, file = "widgets/map3.html")
+# saveWidget(map3, file = "widgets/map3.html")
 ```
 
 
@@ -275,11 +273,11 @@ plot(strip_proj$geometry, add = TRUE, border = "red", lwd = 2)
 ```
 
 
-## High Park Comparison
+## High Park
 
 ```{r}
 # Extracting high park neighbourhood polygon ()
-high_park_nb    <- nbhd %>% filter(AREA_SH5 == "087")
+high_park_nb <- nbhd %>% filter(AREA_SH5 == "087")
 
 leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
   addPolygons(data = high_park_nb)
@@ -292,8 +290,131 @@ hp_trees <- st_read("../../../Data/trees_HP/High_Park_Tree.shp")
 
 hp_trees_within <- st_filter(hp_trees, high_park_nb, .predicate = st_within)
 
-high_park_green <- st_filter(green, high_park_nb, .predicate = st_within)
+hp_green <- st_filter(green, high_park_nb, .predicate = st_within)
+
+hp_water <- st_filter(water, high_park_nb, .predicate = st_within)
+
+inaturalist_hp <- read.csv("../../../Data/inaturalist_hp/observations.csv")
+```
 
 
+```{r}
+inaturalist_hp <- inaturalist_hp %>% 
+  mutate(
+    lon = as.numeric(longitude),
+    lat = as.numeric(latitude)
+  ) %>%
+  filter(!is.na(longitude),
+         !is.na(latitude),
+         lon >= -180,
+         lon <= 180,
+         lat >= -90,
+         lat <= 90)
+
+hp_obs <- st_as_sf(inaturalist_hp, coords = c("longitude", "latitude"),
+                   crs = 4326)
+
+hp_obs <- st_filter(hp_obs, high_park_nb, .predicate = st_intersects)
+```
+
+
+```{r}
+hp_obs <- hp_obs %>% mutate(category = case_when(
+  iconic_taxon_name == "Plantae" ~ "Plants",
+  iconic_taxon_name == "Aves" ~ "Birds",
+  iconic_taxon_name == "Insecta" ~ "Insects",
+  iconic_taxon_name == "Mammalia" ~ "Mammals",
+  iconic_taxon_name == "Reptilia" ~ "Reptiles",
+  iconic_taxon_name == "Arachnida" ~ "Spiders",
+  TRUE ~ "Other"))
+
+hp_obs$category <- as.factor(hp_obs$category)
+groups <- levels(hp_obs$category)
+```
+
+
+```{r}
+species_cat.pal <- colorFactor("viridis", domain = groups)
+
+map4 <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data = high_park_nb)
+
+for (g in groups) {
+  map4 <- map4 %>% addCircles(data    = subset(hp_obs, 
+                                               category == g),
+                              group   = g,
+                              popup   = ~paste0(hp_obs$common_name, 
+                                                "<br>Category: ", 
+                                                hp_obs$category,
+                                                "<br>Observed on: ",
+                                                hp_obs$observed_on),
+                              color   = ~species_cat.pal(g),
+                              radius  = 1,
+                              opacity = 1,
+                              weight  = 4)
+}
+
+map4 <- map4 %>% 
+  addLegend("bottomleft", 
+            pal     = species_cat.pal,
+            values  = hp_obs$category,
+            opacity = 1) %>% 
+  addLayersControl(overlayGroups = groups,
+                   options = layersControlOptions(collapsed = FALSE))
+
+map4
+# saveWidget(map4, file = "widgets/map4")
+```
+
+
+```{r}
+map5 <- leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
+  addPolygons(data    = high_park_nb,
+              color   = "lightgray",
+              opacity = 0.8
+              ) %>% 
+  addPolygons(data    = hp_water,
+              color   = "blue",
+              opacity = 0.9,
+              group   = "Waterbodies"
+              ) %>% 
+  addPolygons(data    = hp_green,
+              color   = "lightgreen",
+              opacity = 0.9,
+              group   = "Green Spaces"
+              ) %>% 
+  addCircles(data     = hp_obs,
+             opacity  = 1,
+             color    = "orange",
+             radius   = 1,
+             weight   = 2,
+             group    = "iNaturalist"
+             ) %>% 
+  addCircles(data     = hp_trees_within,
+             opacity  = 1,
+             color    = "darkgreen",
+             radius   = 1,
+             weight   = 2,
+             group    = "Trees"
+             ) %>% 
+  addLegend("bottomright",
+            colors = c("orange",
+                       "darkgreen",
+                       "blue",
+                       "lightgreen"),
+            labels = c("Biodiversity (iNaturalist)",
+                       "Trees",
+                       "Waterbodies",
+                       "Green Spaces")
+            ) %>% 
+  addLayersControl(position      = "topright",
+                   overlayGroups = c("iNaturalist",
+                                     "Trees",
+                                     "Waterbodies",
+                                     "Green Spaces"),
+                   options       = layersControlOptions(collapsed = TRUE))
+
+map5
+# saveWidget(map5, file = "widgets/map5")
 ```
 
