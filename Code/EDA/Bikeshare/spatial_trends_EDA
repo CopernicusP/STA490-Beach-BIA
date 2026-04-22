@@ -1,0 +1,169 @@
+# Spatial Plot of where trips to the Beach STARTED:
+
+# Creating a file which saves the spatial locations of each bike trip, as this
+# spatial encoding process took extremely long to run. 
+
+# If you would like to run the code, uncomment the following commented lines.
+# Otherwise, the file is already prepared to be loaded in.
+
+# all_trips_to_beach$Start.Station.Name <- iconv(
+#   all_trips_to_beach$Start.Station.Name,
+#   from = "",
+#   to   = "UTF-8",
+#   sub  = "?"
+# )
+# 
+# start_stations_to_beach <- all_trips_to_beach %>%
+#   filter(!is.na(Start.Station.Name),
+#          Start.Station.Name != "",
+#          Start.Station.Name != "NULL") %>%
+#   distinct(Start.Station.Name) %>%
+#   rename(start_station = Start.Station.Name)
+# 
+# start_stations_to_beach_geo <- start_stations_to_beach %>%
+#   geocode(address = start_station,
+#           method = "osm",
+#           long = longitude,
+#           lat = latitude) %>%
+#   filter(!is.na(longitude) & !is.na(latitude))
+# 
+# saveRDS(start_stations_to_beach_geo,
+#         "start_stations_to_beach_geo.rds")
+
+start_stations_to_beach_geo <-
+  readRDS("start_stations_to_beach_geo.rds")
+
+start_stations_to_beach_coord <- st_as_sf(start_stations_to_beach_geo,
+  coords = c("longitude", "latitude"),
+  crs = 4326
+)
+
+start_station_counts <- all_trips_to_beach %>%
+  filter(!is.na(Start.Station.Name),
+         Start.Station.Name != "",
+         Start.Station.Name != "NULL") %>%
+  group_by(Start.Station.Name) %>%
+  summarise(trip_count = n())
+
+start_stations_to_beach_coord <- start_stations_to_beach_coord %>%
+  distinct(start_station, .keep_all = TRUE) %>%
+  left_join(start_station_counts, by = c("start_station" = "Start.Station.Name")
+  ) %>%
+  filter(!is.na(trip_count))
+
+start_stations_to_beach_coord <- start_stations_to_beach_coord %>%
+  filter(
+    st_coordinates(.)[, 1] > -80,
+    st_coordinates(.)[, 1] < -78,
+    st_coordinates(.)[, 2] > 43,
+    st_coordinates(.)[, 2] < 44
+  )
+
+pal <- colorNumeric(
+  palette = "YlOrRd",
+  domain = start_stations_to_beach_coord$trip_count
+)
+
+leaflet(start_stations_to_beach_coord) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    popup = ~paste0("<b>", start_station, "</b><br>Trips: ", trip_count),
+    color = ~pal(trip_count),
+    radius = ~pmax(3, log(trip_count + 1) * 2),
+    fillOpacity = 0.9,
+    stroke = FALSE
+  ) %>%
+  addLegend(
+    position = "bottomright",
+    pal = pal,
+    values = ~trip_count,
+    title = "Number of Trips"
+)
+
+# Spatial Plot of where trips from the Beach ENDED:
+
+# all_trips_from_beach$End.Station.Name <- iconv(
+#   all_trips_from_beach$End.Station.Name,
+#   from = "",
+#   to   = "UTF-8",
+#   sub  = "?"
+# )
+# 
+# end_stations_from_beach <- all_trips_from_beach %>%
+#   filter(!is.na(End.Station.Name),
+#          End.Station.Name != "",
+#          End.Station.Name != "NULL") %>%
+#   distinct(End.Station.Name) %>%
+#   rename(end_station = End.Station.Name)
+# 
+# end_stations_from_beach_geo <- end_stations_from_beach %>%
+#   geocode(address = end_station,
+#           method = "osm",
+#           long = longitude,
+#           lat = latitude) %>%
+#   filter(!is.na(longitude) & !is.na(latitude))
+# 
+# saveRDS(end_stations_from_beach_geo,
+#         "end_stations_from_beach_geo.rds")
+
+end_stations_from_beach_geo <-
+  readRDS("end_stations_from_beach_geo.rds")
+
+end_stations_from_beach_coord <- st_as_sf(end_stations_from_beach_geo,
+  coords = c("longitude", "latitude"),
+  crs = 4326
+)
+
+end_station_counts <- all_trips_from_beach %>%
+  filter(!is.na(End.Station.Name),
+         End.Station.Name != "",
+         End.Station.Name != "NULL") %>%
+  group_by(End.Station.Name) %>%
+  summarise(trip_count = n())
+
+end_stations_from_beach_coord <- end_stations_from_beach_coord %>%
+  distinct(end_station, .keep_all = TRUE) %>%
+  left_join(end_station_counts, by = c("end_station" = "End.Station.Name")) %>%
+  filter(!is.na(trip_count))
+
+end_stations_from_beach_coord <- end_stations_from_beach_coord %>%
+  filter(
+    st_coordinates(.)[, 1] > -80,
+    st_coordinates(.)[, 1] < -78,
+    st_coordinates(.)[, 2] > 43,
+    st_coordinates(.)[, 2] < 44
+  )
+
+pal <- colorNumeric(
+  palette = "YlOrRd",
+  domain = end_stations_from_beach_coord$trip_count,
+  na.color = "gray"
+)
+
+leaflet(end_stations_from_beach_coord) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    popup = ~paste0("<b>", end_station, "</b><br>Trips: ", trip_count),
+    color = ~pal(trip_count),
+    radius = ~pmax(3, log(trip_count + 1) * 2),
+    fillOpacity = 0.9,
+    stroke = FALSE
+  ) %>%
+  addLegend(
+    position = "bottomright",
+    pal = pal,
+    values = ~trip_count,
+    title = "Number of Trips"
+  )
+
+# Calculating the proportion of bike trips relating to a Beach BIA station that
+# remained within the BIA.
+within_beach <- all_trips_from_beach %>%
+  filter(End.Station.Name %in% beach_bike_stations)
+
+within_beach2 <- all_trips_to_beach %>%
+  filter(Start.Station.Name %in% beach_bike_stations)
+
+proportion_within_beach <- (nrow(within_beach) + nrow(within_beach2)) /
+  (nrow(all_trips_from_beach) + nrow(all_trips_to_beach))
+proportion_within_beach
