@@ -257,7 +257,7 @@ rings_utm <- do.call(rbind, lapply(seq_len(bands), function(i) {
 
 rings <- st_transform(rings_utm, st_crs(beach_polygon))
 
-ring_color_scale <- rev(brewer.pal(max(3, min(9, n_bands)), "YlOrBr"))
+ring_color_scale <- rev(brewer.pal(max(3, min(9, bands)), "YlOrBr"))
 ring_colors <- colorFactor(palette = ring_color_scale, domain = sort(unique(rings$band_m)))
 line_colors <- colorNumeric(palette = "#6baed6", domain = trip_pair_lines$trip_count, na.color = "gray")
 
@@ -281,7 +281,7 @@ ring_groups <- paste0("Ring ", rings$band_label)
 
 map <- leaflet() %>%
   addProviderTiles(providers$CartoDB.Positron) %>%
-  addPolygons(data = beach_poly, fill = FALSE, color = "#08306b",
+  addPolygons(data = beach_polygon, fill = FALSE, color = "#08306b",
               weight = 2, opacity = 1, group = "Beach Boundary")
 
 for (i in seq_len(nrow(rings))) {
