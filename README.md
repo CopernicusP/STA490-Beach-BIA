@@ -41,11 +41,11 @@ We keep the top-level structure consistent so everyone can find things quickly:
 ## Contributions (for check-in)
 Please keep this section updated so it’s clear who did what.
 
-- **Rebecca Li:** all BikeShare parts
 - **Peter (Yudian Pan):** biodiversity EDA + consolidated notebook work; repo structure cleanup (Code/Data/Figures/Results), documentation + navigation in main README; branch organization and readability improvements.
 - **Derek Li:** biodiversity EDA and mapping + presentation artifacts; leading final graphs/maps + High Park comparison / presentation selection.
 - **Jingyi Zhang & Gengqi Qian:** 311 complaint part. The specific contributions are under the branch.
-
+- **Rebecca Li:** all BikeShare parts
+  
 ## Notes
 - Don’t duplicate large raw datasets in multiple places—prefer `Data/` as the shared source of truth.
 - Auto-generated artifacts (e.g., `*_files/`, caches) should generally stay in `Results/` or be ignored via `.gitignore` unless required for submission.
