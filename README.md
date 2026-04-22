@@ -41,13 +41,10 @@ We keep the top-level structure consistent so everyone can find things quickly:
 ## Contributions (for check-in)
 Please keep this section updated so it’s clear who did what.
 
-- **Peter (Yudian Pan):** biodiversity EDA + consolidated notebook work; repo cleanup/documentation for check-in; branch organization and readability improvements.
-- **Derek Li:** biodiversity EDA and mapping (all in bio_eda) + presentation figures + leading final graphs/maps + High Park comparison / presentation selection.
 - **Rebecca Li:** all BikeShare parts
-- **Peter (Yudian Pan):** biodiversity EDA + consolidated notebook work; Repo structure cleanup (Code/Data/Figures/Results), documentation + navigation in main README; branch organization and readability improvements.
-- **Derek Li:** biodiversity mapping + presentation artifacts; leading final graphs/maps + High Park comparison / presentation selection.
+- **Peter (Yudian Pan):** biodiversity EDA + consolidated notebook work; repo structure cleanup (Code/Data/Figures/Results), documentation + navigation in main README; branch organization and readability improvements.
+- **Derek Li:** biodiversity EDA and mapping + presentation artifacts; leading final graphs/maps + High Park comparison / presentation selection.
 - **Jingyi Zhang & Gengqi Qian:** 311 complaint part. The specific contributions are under the branch.
-
 
 ## Notes
 - Don’t duplicate large raw datasets in multiple places—prefer `Data/` as the shared source of truth.
