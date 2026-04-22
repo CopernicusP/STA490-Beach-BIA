@@ -13,8 +13,8 @@ This project includes multiple workstreams. Each workstream should have a clear 
 
 - **Biodiversity (iNaturalist + City Open Data)**  
   Entry: `Code/Beach_BIA_Biodiversity_CONSOLIDATED.Rmd` (or the Biodiversity folder entry point used by the team)
-- **BikeShare (draft/ongoing)**  
-  Entry: `Code/Beach_BIA_BikeShare/` (update with the main script/notebook)
+- **BikeShare (Toronto Open Data)**  
+  Entry: `Code/Beach_BIA_BikeShare/` 
 - **311 Complaints (Toronto Open Data)**
   Entry: `Code/Beach_BIA_311_Complaints.Rmd/` (or under 311 complaints branch contains more)
 
@@ -44,11 +44,10 @@ Please keep this section updated so it’s clear who did what.
 <<<<<<< HEAD
 - **Peter (Yudian Pan):** biodiversity EDA + consolidated notebook work; repo cleanup/documentation for check-in; branch organization and readability improvements.
 - **Derek Li:** biodiversity EDA and mapping (all in bio_eda) + presentation figures + leading final graphs/maps + High Park comparison / presentation selection.
-- **Other members/groups:** (add names + 1–2 bullet responsibilities here)
-=======
+- **Rebecca Li:** all BikeShare parts
 - **Peter (Yudian Pan):** biodiversity EDA + consolidated notebook work; Repo structure cleanup (Code/Data/Figures/Results), documentation + navigation in main README; branch organization and readability improvements.
 - **Derek Li:** biodiversity mapping + presentation artifacts; leading final graphs/maps + High Park comparison / presentation selection.
-- **Jingyi & Gengqi** 311 complaint part. The specific contributions are under the branch.
+- **Jingyi Zhang & Gengqi Qian** 311 complaint part. The specific contributions are under the branch.
 >>>>>>> origin/main
 
 ## Notes
