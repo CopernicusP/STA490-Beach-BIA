@@ -15,7 +15,7 @@ This project includes multiple workstreams. Each workstream should have a clear 
   Entry: `Code/Beach_BIA_Biodiversity_CONSOLIDATED.Rmd` (or the Biodiversity folder entry point used by the team)
 - **BikeShare (Toronto Open Data)**  
   Entry: `Code/Beach_BIA_BikeShare/` 
-- **311 Complaints (Toronto Open Data)**
+- **311 Complaints (Toronto Open Data)**  
   Entry: `Code/Beach_BIA_311_Complaints.Rmd/` (or under 311 complaints branch contains more)
 
 > If a workstream has detailed assumptions / parameters / file naming rules, place them in that workstream’s own README (not here).
@@ -46,7 +46,7 @@ Please keep this section updated so it’s clear who did what.
 - **Rebecca Li:** all BikeShare parts
 - **Peter (Yudian Pan):** biodiversity EDA + consolidated notebook work; Repo structure cleanup (Code/Data/Figures/Results), documentation + navigation in main README; branch organization and readability improvements.
 - **Derek Li:** biodiversity mapping + presentation artifacts; leading final graphs/maps + High Park comparison / presentation selection.
-- **Jingyi Zhang & Gengqi Qian** 311 complaint part. The specific contributions are under the branch.
+- **Jingyi Zhang & Gengqi Qian:** 311 complaint part. The specific contributions are under the branch.
 
 
 ## Notes
