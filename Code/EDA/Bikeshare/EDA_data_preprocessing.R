@@ -1,0 +1,271 @@
+# Extracting which bike stops are located in the Beach BIA using a sample from
+# June 2023 and July 2023 data (these are popular months for riding bikes).
+
+bike_data_2023_06 <- read.csv("BikeShare_2023_06.csv")
+bike_data_2023_07 <- read.csv("BikeShare_2023_07.csv")
+
+stations_2023_06 <- data.frame(
+  start_station = bike_data_2023_06$Start.Station.Name
+)
+stations_2023_07 <- data.frame(
+  start_station = bike_data_2023_07tart.Station.Name
+)
+
+bike_stations <- bind_rows(stations_2023_06,
+                           stations_2023_07) %>%
+  distinct(start_station)
+
+bike_stations_geo <- bike_stations %>%
+  geocode(address = start_station,
+          method = "osm",
+          long = longitude,
+          lat = latitude)
+bike_stations_geo <- na.omit(bike_stations_geo)
+
+bike_stations_coordinates <- st_as_sf(
+  bike_stations_geo,
+  coords = c("longitude", "latitude"),
+  crs = 4326
+)
+
+beach_bike_stations <- neighbourhoods %>%
+  filter(AREA_SHORT_CODE == "063")
+
+beach_bike_stations <- st_join(
+  bike_stations_coordinates, beach_bike_stations, join = st_within
+)
+beach_bike_stations <- beach_bike_stations %>% filter(!is.na(AREA_NAME))
+beach_bike_stations <- beach_bike_stations$start_station
+
+# Creating two datasets: one of bike trips FROM the Beaches and the other of
+# bike trips TO the Beaches.
+
+# First, combine monthly datasets into yearly datasets
+
+# 2021
+bikeshare_2021 <- list.files(pattern = "Bike share ridership 2021")
+bikeshare_2021 <- lapply(bikeshare_2021, read.csv)
+
+bikeshare_2021 <- lapply(bikeshare_2021, function(df) {
+  df$Start.Station.Id <- suppressWarnings(
+    as.integer(as.character(df$Start.Station.Id))
+  )
+  df$End.Station.Id <- suppressWarnings(
+    as.integer(as.character(df$End.Station.Id))
+  )
+  df$Bike.Id <- suppressWarnings(
+    as.integer(as.character(df$Bike.Id))
+  )
+  df
+})
+
+bikeshare_2021 <- dplyr::bind_rows(bikeshare_2021) %>%
+  select(
+    Trip..Duration,
+    Start.Station.Name,
+    End.Station.Name,
+    User.Type,
+    Start.Time
+  ) %>%
+  na.omit()
+
+trips_to_beach_2021 <- bikeshare_2021 %>%
+  filter(End.Station.Name %in% beach_bike_stations)
+
+trips_from_beach_2021 <- bikeshare_2021 %>%
+  filter(Start.Station.Name %in% beach_bike_stations)
+
+rm(bikeshare_2021)
+gc()
+
+# 2022
+bikeshare_2022 <- list.files(pattern = "Bike share ridership 2022")
+bikeshare_2022 <- lapply(bikeshare_2022, read.csv)
+
+bikeshare_2022 <- lapply(bikeshare_2022, function(df) {
+  df$Start.Station.Id <- suppressWarnings(
+    as.integer(as.character(df$Start.Station.Id))
+  )
+  df$End.Station.Id <- suppressWarnings(
+    as.integer(as.character(df$End.Station.Id))
+  )
+  df$Bike.Id <- suppressWarnings(
+    as.integer(as.character(df$Bike.Id))
+  )
+  df
+})
+
+bikeshare_2022 <- dplyr::bind_rows(bikeshare_2022) %>%
+  select(
+    Trip..Duration,
+    Start.Station.Name,
+    End.Station.Name,
+    User.Type,
+    Start.Time
+  ) %>%
+  na.omit()
+
+trips_to_beach_2022 <- bikeshare_2022 %>%
+  filter(End.Station.Name %in% beach_bike_stations)
+
+trips_from_beach_2022 <- bikeshare_2022 %>%
+  filter(Start.Station.Name %in% beach_bike_stations)
+
+rm(bikeshare_2022)
+gc()
+
+# 2023
+bikeshare_2023 <- list.files(pattern = "Bike share ridership 2023")
+bikeshare_2023 <- lapply(bikeshare_2023, read.csv)
+
+bikeshare_2023 <- lapply(bikeshare_2023, function(df) {
+  df$Start.Station.Id <- suppressWarnings(
+    as.integer(as.character(df$Start.Station.Id))
+  )
+  df$End.Station.Id <- suppressWarnings(
+    as.integer(as.character(df$End.Station.Id))
+  )
+  df$Bike.Id <- suppressWarnings(
+    as.integer(as.character(df$Bike.Id))
+  )
+  df
+})
+
+bikeshare_2023 <- dplyr::bind_rows(bikeshare_2023) %>%
+  select(
+    Trip..Duration,
+    Start.Station.Name,
+    End.Station.Name,
+    User.Type,
+    Start.Time
+  ) %>%
+  na.omit()
+
+trips_to_beach_2023 <- bikeshare_2023 %>%
+  filter(End.Station.Name %in% beach_bike_stations)
+
+trips_from_beach_2023 <- bikeshare_2023 %>%
+  filter(Start.Station.Name %in% beach_bike_stations)
+
+rm(bikeshare_2023)
+gc()
+
+# 2024
+bikeshare_2024 <- list.files(pattern = "Bike share ridership 2024")
+bikeshare_2024 <- lapply(bikeshare_2024, read.csv)
+
+bikeshare_2024 <- lapply(bikeshare_2024, function(df) {
+  df$Start.Station.Id <- suppressWarnings(
+    as.integer(as.character(df$Start.Station.Id))
+  )
+  df$End.Station.Id <- suppressWarnings(
+    as.integer(as.character(df$End.Station.Id))
+  )
+  df$Bike.Id <- suppressWarnings(
+    as.integer(as.character(df$Bike.Id))
+  )
+  df
+})
+
+bikeshare_2024 <- dplyr::bind_rows(bikeshare_2024) %>%
+  select(
+    Trip..Duration,
+    Start.Station.Name,
+    End.Station.Name,
+    User.Type,
+    Start.Time
+  ) %>%
+  na.omit()
+
+trips_to_beach_2024 <- bikeshare_2024 %>%
+  filter(End.Station.Name %in% beach_bike_stations)
+
+trips_from_beach_2024 <- bikeshare_2024 %>%
+  filter(Start.Station.Name %in% beach_bike_stations)
+
+rm(bikeshare_2024)
+gc()
+
+# Combining yearly datasets into the two separate datasets
+
+all_trips_to_beach <- bind_rows(trips_to_beach_2021,
+                                trips_to_beach_2022,
+                                trips_to_beach_2023,
+                                trips_to_beach_2024)
+
+# Some bike stations had the same coordinate but different titles and therefore
+# treated as separate stations. Therefore, they needed to be combined.
+
+all_trips_to_beach <- all_trips_to_beach %>%
+  mutate(
+    Start.Station.Name = ifelse(
+      Start.Station.Name == "Hubbard Blvd. / Glen Manor Dr.",
+      "Hubbard Blvd / Glen Manor Dr",
+      Start.Station.Name
+    )
+  ) %>%
+  mutate(
+    End.Station.Name = ifelse(
+      End.Station.Name == "Hubbard Blvd. / Glen Manor Dr.",
+      "Hubbard Blvd / Glen Manor Dr",
+      End.Station.Name
+    )
+  ) %>%
+  mutate(
+    Start.Station.Name = ifelse(
+      Start.Station.Name == "Lower Coxwell Ave /  Lake Shore Blvd E",
+      "Coxwell Ave /  Lake Shore Blvd E",
+      Start.Station.Name
+    )
+  ) %>%
+  mutate(
+    End.Station.Name = ifelse(
+      End.Station.Name == "Lower Coxwell Ave /  Lake Shore Blvd E",
+      "Coxwell Ave /  Lake Shore Blvd E",
+      End.Station.Name
+    )
+  )
+
+write.csv(all_trips_to_beach, "all_trips_to_beach.csv", row.names = FALSE)
+
+trips_from_beach_2021 <- read.csv("trips_from_beach_2021.csv")
+trips_from_beach_2022 <- read.csv("trips_from_beach_2022.csv")
+trips_from_beach_2023 <- read.csv("trips_from_beach_2023.csv")
+trips_from_beach_2024 <- read.csv("trips_from_beach_2024.csv")
+
+all_trips_from_beach <- bind_rows(trips_from_beach_2021,
+                                  trips_from_beach_2022,
+                                  trips_from_beach_2023,
+                                  trips_from_beach_2024)
+
+all_trips_from_beach <- all_trips_from_beach %>%
+  mutate(
+    Start.Station.Name = ifelse(
+      Start.Station.Name == "Hubbard Blvd. / Glen Manor Dr.",
+      "Hubbard Blvd / Glen Manor Dr",
+      Start.Station.Name
+    )
+  ) %>%
+  mutate(
+    End.Station.Name = ifelse(
+      End.Station.Name == "Hubbard Blvd. / Glen Manor Dr.",
+      "Hubbard Blvd / Glen Manor Dr",
+      End.Station.Name
+    )
+  ) %>%
+  mutate(
+    Start.Station.Name = ifelse(
+      Start.Station.Name == "Lower Coxwell Ave /  Lake Shore Blvd E",
+      "Coxwell Ave /  Lake Shore Blvd E",
+      Start.Station.Name
+    )
+  ) %>%
+  mutate(
+    End.Station.Name = ifelse(
+      End.Station.Name == "Lower Coxwell Ave /  Lake Shore Blvd E",
+      "Coxwell Ave /  Lake Shore Blvd E",
+      End.Station.Name
+    )
+  )
+
+write.csv(all_trips_from_beach, "all_trips_from_beach.csv", row.names = FALSE)

@@ -1,0 +1,35 @@
+bike_data_2023_06 <- read.csv("BikeShare_2023_06.csv")
+bike_data_2023_07 <- read.csv("BikeShare_2023_07.csv")
+
+stations_2023_06 <- data.frame(
+  start_station = bike_data_2023_06$Start.Station.Name
+)
+stations_2023_07 <- data.frame(
+  start_station = bike_data_2023_07tart.Station.Name
+)
+
+bike_stations <- bind_rows(stations_2023_06,
+                           stations_2023_07) %>%
+  distinct(start_station)
+
+bike_stations_geo <- bike_stations %>%
+  geocode(address = start_station,
+          method = "osm",
+          long = longitude,
+          lat = latitude)
+bike_stations_geo <- na.omit(bike_stations_geo)
+
+bike_stations_coordinates <- st_as_sf(
+  bike_stations_geo,
+  coords = c("longitude", "latitude"),
+  crs = 4326
+)
+
+highpark_bike_stations <- neighbourhoods %>%
+  filter(AREA_SHORT_CODE == "087")
+
+highpark_bike_stations <- st_join(
+  bike_stations_coordinates, highpark_bike_stations, join = st_within
+)
+highpark_bike_stations <- highpark_bike_stations %>% filter(!is.na(AREA_NAME))
+highpark_bike_stations <- highpark_bike_stations$start_station
