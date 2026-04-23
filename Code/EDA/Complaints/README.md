@@ -1,6 +1,6 @@
 # Toronto 311 Complaints Analysis (Beach BIA Case Study)
 
-This project analyzes Toronto 311 service request data with a focus on the **Beach BIA area**, aiming to understand complaint patterns, temporal trends, and distributions of municipal service requests.
+This project analyzes Toronto 311 service request data with a focus on the **Beach BIA area**, aiming to understand complaint patterns, temporal trends, and distributions of municipal service requests between the Beach BIA and High Park BIA.
 
 The analysis combines exploratory data analysis (EDA) and time-series visualization to provide insights into how different types of city services are requested over time and across categories.
 
@@ -12,6 +12,7 @@ Toronto’s 311 system serves as a primary interface between residents and city 
 Understanding complaint patterns can help:
 - Identify high-demand service areas
 - Reveal seasonal or temporal trends
+- Compare service needs across neighborhoods
 - Inform data-driven urban planning and resource allocation
 
 This project focuses on the **Beach BIA** as a case study to explore how complaint behavior differs by category and service section within a defined local area.
@@ -30,7 +31,7 @@ This project focuses on the **Beach BIA** as a case study to explore how complai
   - ...
 
 > Data were cleaned, filtered, and aggregated for analysis.  
-> Only relevant records within the Beach BIA boundary were retained.
+> Only relevant records within the Beach BIA boundary and High Park BIA boundary were retained.
 
 The raw Toronto 311 service request data are not included in this repository due to file size limitations.
 They can be downloaded from the Toronto Open Data Portal: [https://open.toronto.ca/dataset/311-service-requests/](https://open.toronto.ca/dataset/311-service-requests-customer-initiated/).
@@ -69,8 +70,8 @@ All analysis in this project is based on the processed dataset generated from th
 - **Overall level trend**: Across all four years, complaint volumes remain high, with no evidence of structural decline.
 - **Within-year shape**: Lower complaint volumes in winter months, rising into spring, and peaking around summer before easing in late autumn.
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/22b629aa-c922-4c57-b788-0b8ee599bca0" width="280" />
-  <img src="https://github.com/user-attachments/assets/f3ffaec2-e320-4f5f-8c00-aa4d83d660d0" width="280" />
+  <img src="https://github.com/user-attachments/assets/afff57d2-5b4f-439a-8d8b-da6d51e1358d" width="280" />
+  <img src="https://github.com/user-attachments/assets/2238aacf-e619-4527-8aac-deaec3ea1c51" width="280" />
 </p>
 <p align="center">
   <img width="280" alt="Monthly trend 2022-2025oct" src="https://github.com/user-attachments/assets/b943eb24-7700-4b8c-83c0-4086fb57c33b" />
@@ -80,7 +81,7 @@ All analysis in this project is based on the processed dataset generated from th
 
 ## Tools & Technologies
 
-- **R and jupyer notebook** for all coding, including packages: dplyr, lubridate, ggplot2, scales, stringr.
+- **R and Jupyter notebook** for all coding, including packages: dplyr, lubridate, ggplot2, scales, stringr.
 
 ---
 
@@ -96,14 +97,14 @@ Specifically, Jinyi was responsible for:
   - Identifying and filtering bike-related service requests from the full dataset
   - Conducting exploratory data analysis (EDA) on bike complaints
   - Producing visualizations to examine trends and relative prevalence
-  - Interpreting bike-related findings in the context of overall 311 service demand
+  - Interpreting bike-related findings in the context of the overall 311 service demand
   - Analyzing the composition of bike-related request types (e.g. abandoned bikes, bike lane maintenance, lane damage)
 
 These components provide key quantitative insights into both general complaint patterns and bike-specific service issues within the Beach BIA area.
 
 ### Gengqi’s contributions focused on over-sections complaint distributions, time trends, and gratiffi-related service requests in the Beach BIA area.
 
-Specifically, gengqi was responsible for:
+Specifically, Gengqi was responsible for:
 
 - Analyzing overall 311 complaint volumes in the Beach BIA, including:
   - Aggregating complaints by service section and major category
