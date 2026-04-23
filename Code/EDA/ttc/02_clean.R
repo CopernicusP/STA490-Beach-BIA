@@ -3,8 +3,8 @@ library(tidyverse)
 
 
 # read dataset
-beach_filtered <- read_rds("data/01_ttc/01_beach_filtered.rds")
-park_filtered <- read_rds("data/01_ttc/02_park_filtered.rds")
+beach_filtered <- read_rds("Data/ttc/01_beach_filtered.rds")
+park_filtered <- read_rds("Data/ttc/02_park_filtered.rds")
 
 
 # clean dataset
@@ -34,5 +34,5 @@ park_clean <- park_filtered |>
 
 
 # write cleaned dataset to rds file
-write_rds(beach_clean, "data/01_ttc/03_beach_clean.rds")
-write_rds(park_clean, "data/01_ttc/04_park_clean.rds")
+write_rds(beach_clean, "Data/ttc/03_beach_clean.rds")
+write_rds(park_clean, "Data/ttc/04_park_clean.rds")
