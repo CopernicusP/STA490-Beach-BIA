@@ -31,7 +31,7 @@
 #         "start_stations_to_beach_geo.rds")
 
 start_stations_to_beach_geo <-
-  readRDS("start_stations_to_beach_geo.rds")
+  readRDS("Data/bike_stations_spatial/start_stations_to_beach_geo.rds")
 
 start_stations_to_beach_coord <- st_as_sf(start_stations_to_beach_geo,
   coords = c("longitude", "latitude"),
@@ -107,7 +107,7 @@ leaflet(start_stations_to_beach_coord) %>%
 #         "end_stations_from_beach_geo.rds")
 
 end_stations_from_beach_geo <-
-  readRDS("end_stations_from_beach_geo.rds")
+  readRDS("Data/bike_stations_spatial/end_stations_from_beach_geo.rds")
 
 end_stations_from_beach_coord <- st_as_sf(end_stations_from_beach_geo,
   coords = c("longitude", "latitude"),
