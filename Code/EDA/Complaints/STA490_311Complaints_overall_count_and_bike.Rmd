@@ -1,0 +1,303 @@
+---
+title: "STA490_311Complaints_overall_count_and_bike"
+output: html_document
+date: "2026-03-30"
+---
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(scales)
+library(stringr)
+library(googlesheets4)
+```
+# upload and read file
+```{r}
+url_2022 <- "https://drive.google.com/uc?export=download&id=1kEyNKpAKALl2nxEmkO5Vyzl6HUDY2IsJ"
+url_2023 <- "https://drive.google.com/uc?export=download&id=1MGwfHsucz-wqOD3iIrrXq9e2XC58PD8y"
+url_2024 <- "https://drive.google.com/uc?export=download&id=1CaOFmCz7RdB-s586nCf-cWtzXa_Ug_jg"
+url_2025 <- "https://drive.google.com/uc?export=download&id=1X5QU0D4Rc7_0jKekDos1_1JcBdNvdV2c"
+
+df_2022 <- read.csv(url_2022)
+df_2023 <- read.csv(url_2023)
+df_2024 <- read.csv(url_2024)
+df_2025 <- read.csv(url_2025)
+```
+
+# filter area BEACH and HIGHPARK
+```{r}
+# combine all files
+df <- bind_rows(df_2022, df_2023, df_2024, df_2025)
+
+# filter area (beach & highpark)
+df_beach <- df %>%
+  filter(First.3.Chars.of.Postal.Code == "M4E" |
+         First.3.Chars.of.Postal.Code == "M4L" |
+         First.3.Chars.of.Postal.Code == "M4M")
+
+df_highpark <- df %>%
+  filter(Ward == "Parkdale-High Park (04)")
+```
+
+# put all sections into 5 major categories: Waste & Environmental, Animal & Parks, Traffic & Road, Municipal Operations, Enforcement & Investigation
+```{r}
+categorize_data <- function(data) {
+  data %>%
+    mutate(
+      Major_Category = case_when(
+        Section %in% c("Collections", "Waste Enforcement", "Litter Operations",
+                       "Collections and Litter Operations") 
+        ~ "Waste & Environmental",
+
+        Section %in% c("Toronto Animal Services", "Parks Enforcement",
+                       "Forestry & Recreation", "Climate & Forestry", "Parks") 
+        ~ "Animal & Parks",
+
+        Section %in% c("Road Operations", "Right of Way (ROW)", "Traffic Ops",
+                       "Traffic Safety", "Traffic Management", "TMC", "Transfer") 
+        ~ "Traffic & Road",
+
+        Section %in% c("District Ops", "Operations", 
+                       "Business Operations Management") 
+        ~ "Municipal Operations",
+
+        Section %in% c("Investigation Services", "Bylaw Enforcement",
+                       "Business Licensing Enforcement", "Permits & Enforcement") 
+        ~ "Enforcement & Investigation",
+
+        TRUE ~ "Other"
+      )
+    )
+}
+```
+
+```{r}
+# categorize both areas
+df_beach <- categorize_data(df_beach)
+df_highpark <- categorize_data(df_highpark)
+```
+
+```{r}
+get_cate_counts <- function(data) {
+  data %>%
+    count(Major_Category) %>%
+    mutate(
+      prop = n / sum(n),
+      label = percent(prop, accuracy = 0.1)
+    ) %>%
+    arrange(desc(prop)) %>%
+    mutate(Major_Category = factor(Major_Category, levels = Major_Category))
+}
+```
+
+```{r}
+cate_counts_beach <- get_cate_counts(df_beach)
+cate_counts_highpark <- get_cate_counts(df_highpark)
+```
+
+```{r}
+my_colors <- c(
+  "#2C5D86",
+  "#4682B4",
+  "#6BAED6",
+  "#9ECAE1",
+  "#C6DBEF",
+  "#E3EEF7"
+)
+```
+
+# barplot for beach area
+```{r}
+ggplot(cate_counts_beach, aes(x = "", y = prop, fill = Major_Category)) +
+  geom_col(width = 1, color = "white") +
+  coord_polar(theta = "y", start = pi/2, direction = -1) +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    size = 4
+  ) +
+  scale_fill_manual(values = my_colors) +
+  labs(
+    title = "Beach Complaint Distribution by Major Category",
+    x = NULL, y = NULL, fill = "Category"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+  )
+```
+
+# barplot for highpark area
+```{r}
+ggplot(cate_counts_highpark, aes(x = "", y = prop, fill = Major_Category)) +
+  geom_col(width = 1, color = "white") +
+  coord_polar(theta = "y", start = pi/2, direction = -1) +
+  geom_text(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    size = 4
+  ) +
+  scale_fill_manual(values = my_colors) +
+  labs(
+    title = "High Park Complaint Distribution by Major Category",
+    x = NULL, y = NULL, fill = "Category"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+  )
+```
+
+# show beach area highest subsection
+```{r}
+library(dplyr)
+library(stringr)
+
+cate_merge_beach <- df_beach %>%
+  filter(Section == "Collections") %>% 
+  mutate(
+    complaint_subgroup = case_when(
+      str_detect(Service.Request.Type, regex("Not Picked Up", ignore_case = TRUE)) ~ "Not Picked Up",
+      TRUE ~ Service.Request.Type
+    )
+  ) %>%
+  count(complaint_subgroup, name = "total_count") %>%
+  arrange(desc(total_count))
+
+cate_merge_beach
+```
+
+```{r}
+# Step 1: filter Beach + Collections
+collections_beach <- df_beach %>%
+  filter(Section == "Collections")
+
+# Step 2: clean complaint subgroup
+cate_merge_beach <- collections_beach %>%
+  mutate(
+    complaint_subgroup = case_when(
+      # first, merge all complaint types containing "Not Picked Up"
+      str_detect(Service.Request.Type, regex("Not Picked Up", ignore_case = TRUE)) ~ "Not Picked Up",
+      
+      # otherwise, extract the last part after ":" or "/"
+      TRUE ~ str_trim(
+        sapply(str_split(Service.Request.Type, "[:/]"), tail, 1)
+      )
+    )
+  ) %>%
+  count(complaint_subgroup, name = "total_count") %>%
+  arrange(desc(total_count))
+
+# View result
+cate_merge_beach
+
+
+cate_merge_beach_top10 <- cate_merge_beach %>%
+  slice_head(n = 10)
+
+cate_merge_beach_top10
+
+
+ggplot(cate_merge_beach_top10,
+       aes(x = reorder(complaint_subgroup, total_count),
+           y = total_count,
+           fill = complaint_subgroup == "Not Picked Up")) +
+  geom_col() +
+  coord_flip() +
+  scale_fill_manual(values = c("TRUE" = "#2C5D86", "FALSE" = "#C6DBEF"), guide = "none") +
+  labs(
+    title = "Top Complaint Subgroups within Collections in the Beach Area",
+    x = "Complaint Subgroup",
+    y = "Count"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# total complaints count
+count(df_beach)
+count(df_highpark)
+```
+
+```{r}
+# collections section count
+collections_count <- df_beach %>%
+  filter(Section == "Collections") %>%
+  summarise(Total = n())
+
+collections_count
+```
+
+# bike-related data
+```{r}
+df_beach_bike <- df_beach %>%
+  filter(str_detect(Service.Request.Type,
+                    regex("bike|bicy", ignore_case = TRUE))) %>%
+  mutate(
+    Creation.Date = parse_date_time(
+      Creation.Date,
+      orders = c("Ymd HMS", "Y-m-d HMS", "Y-m-d HM", "Y-m-d",
+                 "mdY HMS", "mdY HM", "mdY")
+    ),
+    year_month = floor_date(Creation.Date, "month")
+  ) %>%
+  count(year_month, name = "n")
+
+df_beach_bike_raw <- df_beach %>%
+  filter(str_detect(Service.Request.Type, regex("bike|bicy", ignore_case = TRUE)))
+df_beach_bike_raw <- df_beach_bike_raw %>%
+  mutate(
+    Bike_Category = case_when(
+      Service.Request.Type %in% c(
+        "Complaint/Investigation - Abandoned Bikes",
+        "Complaint - Abandoned Bikes in Rideable Condition",
+        "Litter / Bike Removal Inquiry",
+        "Bike Removal and Lost Bike Inquiry"
+      ) ~ "Abandoned / Removal",
+
+      str_detect(Service.Request.Type, regex("ring and post|bike ring|post", ignore_case = TRUE)) ~ "Bike Ring / Post",
+
+      str_detect(Service.Request.Type, regex("lane|trail|cycling", ignore_case = TRUE)) ~ "Bike Lane / Cycling Infrastructure",
+
+      TRUE ~ "Other Bike Issues"
+    )
+  )
+bike_category_count <- df_beach_bike_raw %>%
+  count(Bike_Category, name = "Total") %>%
+  arrange(desc(Total))
+
+bike_category_count
+```
+
+# bike complaints trend
+```{r}
+# draw plot of trend from 2022-2025
+ggplot(df_beach_bike, aes(x = year_month, y = n)) +
+  geom_line() +
+  labs(
+    title = "Monthly total bike-related 311 service requests",
+    x = "Month",
+    y = "Number of bike-related requests"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
+# bike complaints count
+```{r}
+# Horizontal bar plot for bike categories
+
+ggplot(bike_category_count,
+       aes(x = reorder(Bike_Category, Total), y = Total)) +
+  geom_col(fill = "#4682B4") +
+  coord_flip() +
+  labs(
+    title = "Bike-Related 311 Complaints in the Beach Area",
+    x = "",
+    y = "Number of Complaints"
+  ) +
+  theme_minimal(base_size = 13)
+```
+
