@@ -5,8 +5,8 @@ library(tidyverse)
 
 
 # read dataset
-beach <- read_rds("data/01_ttc/03_beach_clean.rds")
-park <- read_rds("data/01_ttc/04_park_clean.rds")
+beach <- read_rds("Data/ttc/03_beach_clean.rds")
+park <- read_rds("Data/ttc/04_park_clean.rds")
 
 
 # visualize table
@@ -14,13 +14,13 @@ beach_table <- beach |>
   head(10) |>
   gt()
 
-gtsave(beach_table, filename = "graphs/01_ttc/00_beach/00_table.png")
+gtsave(beach_table, filename = "Figures/ttc/00_beach/00_table.png")
 
 park_table <- park |>
   head(10) |>
   gt()
 
-gtsave(park_table, filename = "graphs/01_ttc/01_park/00_table.png")
+gtsave(park_table, filename = "Figures/ttc/01_park/00_table.png")
 
 
 # visualize time series
@@ -34,7 +34,7 @@ beach_time <- beach |>
   labs(x = "Time", y = "Number of Delays") +
   theme_minimal()
 
-ggsave("graphs/01_ttc/00_beach/01_time.png", plot = beach_time)
+ggsave("Figures/ttc/00_beach/01_time.png", plot = beach_time)
 
 park_time <- park |>
   mutate(month = floor_date(date, "month")) |>
@@ -46,7 +46,7 @@ park_time <- park |>
   labs(x = "Time", y = "Number of Delays") +
   theme_minimal()
 
-ggsave("graphs/01_ttc/01_park/01_time.png", plot = park_time)
+ggsave("Figures/ttc/01_park/01_time.png", plot = park_time)
 
 
 # visualize categories frequency
@@ -69,7 +69,7 @@ beach_hour <- beach |>
     axis.title.y = element_blank()
   )
 
-ggsave("graphs/01_ttc/00_beach/02_hour.png", plot = beach_hour)
+ggsave("Figures/ttc/00_beach/02_hour.png", plot = beach_hour)
 
 park_hour <- park |>
   mutate(hour = as.numeric(sub(":.*", "", time))) |>
@@ -90,7 +90,7 @@ park_hour <- park |>
     axis.title.y = element_blank()
   )
 
-ggsave("graphs/01_ttc/01_park/02_hour.png", plot = park_hour)
+ggsave("Figures/ttc/01_park/02_hour.png", plot = park_hour)
 
 
 # visualize days of the week
@@ -110,7 +110,7 @@ beach_days <- beach |>
   labs(x = "Days of the Week", y = "Count") +
   theme_minimal()
 
-ggsave("graphs/01_ttc/00_beach/03_days.png", plot = beach_days)
+ggsave("Figures/ttc/00_beach/03_days.png", plot = beach_days)
 
 park_days <- park |>
   mutate(
@@ -128,7 +128,7 @@ park_days <- park |>
   labs(x = "Days of the Week", y = "Count") +
   theme_minimal()
 
-ggsave("graphs/01_ttc/01_park/03_days.png", plot = park_days)
+ggsave("Figures/ttc/01_park/03_days.png", plot = park_days)
 
 
 # visualize station frequency
@@ -141,7 +141,7 @@ beach_loc <- beach |>
   labs(x = "Station", y = "Count") +
   theme_minimal()
 
-ggsave("graphs/01_ttc/00_beach/04_station.png", plot = beach_loc)
+ggsave("Figures/ttc/00_beach/04_station.png", plot = beach_loc)
 
 park_loc <- park |>
   mutate(loc = fct_lump_n(loc, n = 15, other_level = "Other")) |>
@@ -152,7 +152,7 @@ park_loc <- park |>
   labs(x = "Station", y = "Count") +
   theme_minimal()
 
-ggsave("graphs/01_ttc/01_park/04_station.png", plot = park_loc)
+ggsave("Figures/ttc/01_park/04_station.png", plot = park_loc)
 
 
 # visualize incident frequency
@@ -164,7 +164,7 @@ beach_icd <- beach |>
   labs(x = "Incident", y = "Count") +
   theme_minimal()
 
-ggsave("graphs/01_ttc/00_beach/05_incident.png", plot = beach_icd)
+ggsave("Figures/ttc/00_beach/05_incident.png", plot = beach_icd)
 
 park_icd <- park |>
   count(icd) |>
@@ -174,7 +174,7 @@ park_icd <- park |>
   labs(x = "Incident", y = "Count") +
   theme_minimal()
 
-ggsave("graphs/01_ttc/01_park/05_incident.png", plot = park_icd)
+ggsave("Figures/ttc/01_park/05_incident.png", plot = park_icd)
 
 
 # summary statistics of delay and gap
@@ -189,7 +189,7 @@ beach_smr <- beach |>
   ) |>
   gt()
 
-gtsave(beach_smr, filename = "graphs/01_ttc/00_beach/06_summary_dg.png")
+gtsave(beach_smr, filename = "Figures/ttc/00_beach/06_summary_dg.png")
 
 park_smr <- park |>
   select(dly, gap) |>
@@ -202,7 +202,7 @@ park_smr <- park |>
   ) |>
   gt()
 
-gtsave(park_smr, filename = "graphs/01_ttc/01_park/06_summary_dg.png")
+gtsave(park_smr, filename = "Figures/ttc/01_park/06_summary_dg.png")
 
 
 # visualize delay and gap distribution
@@ -220,7 +220,7 @@ beach_gap <- beach |>
 
 beach_combined <- beach_dly / beach_gap
 
-ggsave("graphs/01_ttc/00_beach/07_histo_dg.png", plot = beach_combined)
+ggsave("Figures/ttc/00_beach/07_histo_dg.png", plot = beach_combined)
 
 park_dly <- park |>
   ggplot(aes(x = dly)) +
@@ -236,4 +236,4 @@ park_gap <- park |>
 
 park_combined <- park_dly / park_gap
 
-ggsave("graphs/01_ttc/01_park/07_histo_dg.png", plot = park_combined)
+ggsave("Figures/ttc/01_park/07_histo_dg.png", plot = park_combined)
