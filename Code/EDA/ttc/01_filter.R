@@ -3,7 +3,7 @@ library(tidyverse)
 
 
 # read dataset
-data_raw <- read_rds("data/01_ttc/00_raw.rds")
+data_raw <- read_rds("Data/ttc/00_raw.rds")
 
 
 # select buses/streetcars that serves the beach BIA
@@ -17,5 +17,5 @@ park <- data_raw |>
 
 
 # write filtered dataset to rds file
-write_rds(beach, "data/01_ttc/01_beach_filtered.rds")
-write_rds(park, "data/01_ttc/02_park_filtered.rds")
+write_rds(beach, "Data/ttc/01_beach_filtered.rds")
+write_rds(park, "Data/ttc/02_park_filtered.rds")
