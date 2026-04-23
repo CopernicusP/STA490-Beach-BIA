@@ -31,10 +31,10 @@
 #         "start_stations_to_highpark_geo.rds")
 
 start_stations_to_highpark_geo <-
-  readRDS("start_stations_to_highpark_geo.rds")
+  readRDS("Data/bike_stations_spatial/start_stations_to_highpark_geo.rds")
 
 start_stations_to_beach_geo <-
-  readRDS("start_stations_to_beach_geo.rds")
+  readRDS("Data/bike_stations_spatial/start_stations_to_beach_geo.rds")
 
 all_trips_to_highpark <- all_trips_to_highpark %>%
   mutate(Start.Time = mdy_hm(Start.Time))

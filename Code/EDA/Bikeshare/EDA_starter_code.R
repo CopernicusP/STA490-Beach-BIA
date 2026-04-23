@@ -15,10 +15,10 @@ library(RColorBrewer)
 library(ggplot2)
 library(gridExtra)
 
-all_trips_to_beach <- read.csv("all_trips_to_beach.csv")
-all_trips_from_beach <- read.csv("all_trips_from_beach.csv")
+all_trips_to_beach <- read.csv("Data/bikeshare_trips/all_trips_to_beach.csv")
+all_trips_from_beach <- read.csv("Data/bikeshare_trips/all_trips_from_beach.csv")
 
-neighbourhoods <- st_read("Neighbourhoods - 4326.geojson")
+neighbourhoods <- st_read("Data/neighbourhoods/Neighbourhoods - 4326.shp")
 
 beach_bike_stations <- c("Coxwell Ave /  Lake Shore Blvd E", "Lake Shore Blvd E / Knox Ave",
                          "Hubbard Blvd / Balsam Av", "Kingston Rd / Beech Ave", "Queen St. E / Eastern Ave",

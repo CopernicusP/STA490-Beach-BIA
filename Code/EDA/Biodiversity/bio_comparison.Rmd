@@ -34,7 +34,7 @@ green <- st_read("../../../Data/greenspace/Green Spaces - 4326.shp")
 bia   <- st_read("../../../Data/bia/Business Improvement Areas Data - 4326.shp")
 
 # iNaturalist data
-inaturalist_df <- read.csv("../../../Data/inaturalist/observations0326.csv")
+inaturalist_df <- read.csv("../../../Data/inaturalist/observations.csv")
 inaturalist_hp <- read.csv("../../../Data/inaturalist_hp/observations.csv")
 ```
 
@@ -163,11 +163,7 @@ div_res
 High_Park <- green_HP %>% filter(AREA_NA9 == "HIGH PARK")
 Kew <- green_BIA %>% filter(AREA_NA9 == "KEW GARDENS")
 Glen <- green_BIA %>% filter(AREA_NA9 == "GLEN STEWART PARK")
-
-# leaflet() %>% addProviderTiles("CartoDB.Positron") %>% 
-#   addPolygons(data = High_Park) %>% 
-#   addPolygons(data = Kew) %>% 
-#   addPolygons(data = Glen)
+Woodbine <- green_BIA %>% filter(AREA_NA9 == "WOODBINE PARK")
 ```
 
 
@@ -184,7 +180,8 @@ green_count <- function(x, hp = TRUE) {
 
 div_res <- data.frame(rbind(div_func(green_count(High_Park), "High Park"),
                             div_func(green_count(Kew, hp = FALSE), "Kew Gardens"),
-                            div_func(green_count(Glen, hp = FALSE), "Glen Stewart Park")))
+                            div_func(green_count(Glen, hp = FALSE), "Glen Stewart Park"),
+                            div_func(green_count(Woodbine, hp = FALSE), "Woodbine Park")))
 colnames(div_res) <- c("Area",
                        "# of obs",
                        "richness",
@@ -201,18 +198,25 @@ nb <- st_transform(beach_BIA, crs = 32617)
 hp <- st_transform(high_park, crs = 32617)
 
 div_density <- function(x, y) {
-  area = as.numeric(st_area(x)) / 1e+6
-  n = nrow(y)
-  richness = n_distinct(y$scientific_name)
+  obs <- st_filter(y, x, .predicate = st_within)
+  proj <- st_transform(x, crs = 32617)
+  area <- as.numeric(st_area(proj)) / 1e+6
+  n <- nrow(obs)
+  richness = n_distinct(obs$scientific_name)
   
-  return(c(x$AREA_NA7,
+  return(c(x$AREA_NA9,
            n / area,
            richness / n))
 }
 
-div_density_res <- data.frame(rbind(div_density(nb, obs_sf), 
-                                    div_density(hp, obs_hp)))
-div_density_res
+div_density_res <- data.frame(rbind(div_density(High_Park, obs_hp), 
+                                    div_density(Kew, obs_sf),
+                                    div_density(Glen, obs_sf),
+                                    div_density(Woodbine, obs_sf)))
+colnames(div_density_res) <- c("Green space",
+                               "Observations per km2",
+                               "Richness to observation ratio")
+kable(div_density_res)
 ```
 
 
@@ -235,7 +239,6 @@ obs_hp_pr <- st_transform(obs_hp, 32617)
 
 
 ```{r}
-hp_park <- green_hp_pr %>% filter(AREA_NA9 == "HIGH PARK")
 w <- as.owin(nb)
 
 coords <- st_coordinates(trees_pr)
@@ -243,13 +246,10 @@ coords <- st_coordinates(trees_pr)
 X <- ppp(x = coords[,1],
          y = coords[,2],
          window = w)
-plot(X, main = "Point pattern in window")
-
 
 D <- density.ppp(X,
                  sigma = bw.diggle(X),
                  edge = TRUE)
-plot(D, main = "KDE intensity surface")
 
 D_km2 <- eval.im(D * 1e6)
 plot(D_km2, main = "Trees in The Beaches neighbourhood (trees per km2)")
@@ -276,10 +276,5 @@ D_km2 <- eval.im(D * 1e6)
 plot(D_km2, main = "Trees in Beach BIA (trees per km2)")
 ```
 
-
-```{r}
-hist(obs_pr$dist_green)
-hist(obs_hp_pr$dist_green)
-```
 
 

@@ -21,10 +21,10 @@ library(kableExtra)
 library(scales)
 library(car)
 
-all_trips_to_highpark <- read.csv('all_trips_to_highpark.csv')
-all_trips_to_beach <- read.csv("all_trips_to_beach.csv")
+all_trips_to_highpark <- read.csv('Data/bikeshare_trips/all_trips_to_highpark.csv')
+all_trips_to_beach <- read.csv("Data/bikeshare_trips/all_trips_to_beach.csv")
 
-neighbourhoods <- st_read("Neighbourhoods - 4326.geojson")
+neighbourhoods <- st_read("Data/neighbourhoods/Neighbourhoods - 4326.shp")
 
 
 highpark_bike_stations <- c("High Park Subway", "Parkside Dr / Bloor St W - SMART", 

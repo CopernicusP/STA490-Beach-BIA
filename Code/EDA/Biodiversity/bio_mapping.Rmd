@@ -95,9 +95,14 @@ win <- as.owin(st_geometry(beaches_proj))
 
 pp <- ppp(x = pts[,1], y = pts[,2], window = win)
 
-# Monte Carlo envelope test for CSR
-env <- envelope(pp, Kest, nsim = 10)
-plot(env)
+K <- Kest(pp)
+plot(K)
+
+lambda <- density(pp)
+
+# compute inhomogeneous K
+K_inhom <- Kinhom(pp, lambda = lambda)
+plot(K_inhom)
 ```
 
 
