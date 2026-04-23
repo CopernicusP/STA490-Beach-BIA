@@ -45,6 +45,7 @@ Please keep this section updated so it’s clear who did what.
 - **Derek Li:** biodiversity EDA and mapping + presentation artifacts; leading final graphs/maps + High Park comparison / presentation selection.
 - **Jingyi Zhang & Gengqi Qian:** 311 complaint part. The specific contributions are under the branch.
 - **Rebecca Li:** all BikeShare parts
+- **Yanzun Jiang:** all TTC Delay parts
   
 ## Notes
 - Don’t duplicate large raw datasets in multiple places—prefer `Data/` as the shared source of truth.
