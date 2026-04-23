@@ -20,4 +20,4 @@ data <- bind_rows(bus_22, bus_23, bus_24, sc_22, sc_23, sc_24)
 
 
 # write the dataset to rds file
-write_rds(data, "data/01_ttc/00_raw.rds")
+write_rds(data, "Data/ttc/00_raw.rds")
